@@ -21,6 +21,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Debug: show exactly what hostname the deployed app is trying to use
+    let hostname = "unable-to-parse";
+    try {
+      hostname = new URL(supabaseUrl).hostname;
+    } catch {
+      hostname = `INVALID_URL:${supabaseUrl}`;
+    }
+
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const { data, error } = await supabase
@@ -30,19 +38,29 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       return NextResponse.json(
-        { error: error.message, details: error },
+        {
+          error: error.message,
+          debug: {
+            supabaseUrl,
+            hostname,
+          },
+          details: error,
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({
+      data,
+      debug: {
+        supabaseUrl,
+        hostname,
+      },
+    });
   } catch (err) {
     return NextResponse.json(
       {
-        error:
-          err instanceof Error
-            ? err.message
-            : "Unknown server error in /api/history",
+        error: err instanceof Error ? err.message : "Unknown server error",
       },
       { status: 500 }
     );
