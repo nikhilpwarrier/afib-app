@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: "AFib Care",
   description: "Post-ablation symptom monitoring",
