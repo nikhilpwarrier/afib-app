@@ -214,11 +214,18 @@ function OptionButton({
       style={{
         padding: "12px 16px",
         borderRadius: 12,
-        border: active ? "1px solid #111827" : "1px solid #d4d4d4",
+        border: active ? "1px solid #111827" : "1px solid #e5e7eb",
         background: active ? "#111827" : "white",
         color: active ? "white" : "#111827",
-        fontWeight: 600,
+        fontWeight: 700,
+        letterSpacing: 0.2,
         cursor: "pointer",
+      }}
+      onMouseOver={(e) => {
+        e.currentTarget.style.opacity = "0.92";
+      }}
+      onMouseOut={(e) => {
+        e.currentTarget.style.opacity = "1";
       }}
     >
       {label}
@@ -281,6 +288,29 @@ function TopNav() {
           Dashboard
         </a>
       </div>
+    </div>
+  );
+}
+
+function SectionBox({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        padding: 16,
+        borderRadius: 14,
+        border: "1px solid #e5e7eb",
+        marginBottom: 20,
+        background: "#fafafa",
+      }}
+    >
+      <h2 style={{ fontSize: 18, marginBottom: 12 }}>{title}</h2>
+      {children}
     </div>
   );
 }
@@ -530,7 +560,7 @@ export default function HomePage() {
                     width: "100%",
                     padding: 14,
                     borderRadius: 12,
-                    border: "1px solid #d1d5db",
+                    border: "1px solid #e5e7eb",
                     fontSize: 15,
                   }}
                 />
@@ -556,7 +586,7 @@ export default function HomePage() {
                     width: "100%",
                     padding: 14,
                     borderRadius: 12,
-                    border: "1px solid #d1d5db",
+                    border: "1px solid #e5e7eb",
                     fontSize: 15,
                   }}
                 />
@@ -588,12 +618,22 @@ export default function HomePage() {
                   background: "#1d4ed8",
                   color: "white",
                   fontWeight: 700,
+                  letterSpacing: 0.2,
                   fontSize: 15,
                   cursor:
                     !studyCode.trim() || !ablationDate
                       ? "not-allowed"
                       : "pointer",
                   opacity: !studyCode.trim() || !ablationDate ? 0.5 : 1,
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.opacity = "0.92";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.opacity = !studyCode.trim() ||
+                    !ablationDate
+                    ? "0.5"
+                    : "1";
                 }}
               >
                 Continue
@@ -637,7 +677,14 @@ export default function HomePage() {
                 background: "#111827",
                 color: "white",
                 fontWeight: 700,
+                letterSpacing: 0.2,
                 cursor: "pointer",
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.opacity = "0.92";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.opacity = "1";
               }}
             >
               No symptoms today
@@ -651,10 +698,11 @@ export default function HomePage() {
               style={{
                 padding: "16px",
                 borderRadius: 12,
-                border: "1px solid #d1d5db",
+                border: "1px solid #e5e7eb",
                 background: "white",
                 color: "#111827",
                 fontWeight: 700,
+                letterSpacing: 0.2,
                 cursor: "pointer",
               }}
             >
@@ -666,7 +714,7 @@ export default function HomePage() {
               style={{
                 padding: "12px",
                 borderRadius: 10,
-                border: "1px solid #d1d5db",
+                border: "1px solid #e5e7eb",
                 background: "#f8fafc",
                 color: "#111827",
                 cursor: "pointer",
@@ -695,180 +743,186 @@ export default function HomePage() {
             Tap the options that best match what you are having.
           </p>
 
-          <div style={{ marginBottom: 22 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Palpitations</div>
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                gridTemplateColumns: "repeat(4, 1fr)",
-              }}
-            >
-              <OptionButton
-                label="None"
-                active={palpitations === "none"}
-                onClick={() => {
-                  setPalpitations("none");
-                  setDuration("none");
+          <SectionBox title="Rhythm Symptoms">
+            <div style={{ marginBottom: 22 }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>Palpitations</div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(4, 1fr)",
                 }}
-              />
-              <OptionButton
-                label="Mild"
-                active={palpitations === "mild"}
-                onClick={() => setPalpitations("mild")}
-              />
-              <OptionButton
-                label="Moderate"
-                active={palpitations === "moderate"}
-                onClick={() => setPalpitations("moderate")}
-              />
-              <OptionButton
-                label="Severe"
-                active={palpitations === "severe"}
-                onClick={() => setPalpitations("severe")}
-              />
+              >
+                <OptionButton
+                  label="None"
+                  active={palpitations === "none"}
+                  onClick={() => {
+                    setPalpitations("none");
+                    setDuration("none");
+                  }}
+                />
+                <OptionButton
+                  label="Mild"
+                  active={palpitations === "mild"}
+                  onClick={() => setPalpitations("mild")}
+                />
+                <OptionButton
+                  label="Moderate"
+                  active={palpitations === "moderate"}
+                  onClick={() => setPalpitations("moderate")}
+                />
+                <OptionButton
+                  label="Severe"
+                  active={palpitations === "severe"}
+                  onClick={() => setPalpitations("severe")}
+                />
+              </div>
             </div>
-          </div>
 
-          <div style={{ marginBottom: 22 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>
-              Duration of symptoms
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Duration of symptoms
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                }}
+              >
+                <OptionButton
+                  label="< 5 min"
+                  active={duration === "under_5"}
+                  onClick={() => setDuration("under_5")}
+                />
+                <OptionButton
+                  label="5–30 min"
+                  active={duration === "5_30"}
+                  onClick={() => setDuration("5_30")}
+                />
+                <OptionButton
+                  label="> 30 min"
+                  active={duration === "over_30"}
+                  onClick={() => setDuration("over_30")}
+                />
+              </div>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                gridTemplateColumns: "repeat(3, 1fr)",
-              }}
-            >
-              <OptionButton
-                label="< 5 min"
-                active={duration === "under_5"}
-                onClick={() => setDuration("under_5")}
-              />
-              <OptionButton
-                label="5–30 min"
-                active={duration === "5_30"}
-                onClick={() => setDuration("5_30")}
-              />
-              <OptionButton
-                label="> 30 min"
-                active={duration === "over_30"}
-                onClick={() => setDuration("over_30")}
-              />
-            </div>
-          </div>
+          </SectionBox>
 
-          <div style={{ marginBottom: 22 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Chest pain</div>
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                gridTemplateColumns: "repeat(2, 1fr)",
-              }}
-            >
-              <OptionButton
-                label="No"
-                active={!chestPain}
-                onClick={() => setChestPain(false)}
-              />
-              <OptionButton
-                label="Yes"
-                active={chestPain}
-                onClick={() => setChestPain(true)}
-              />
+          <SectionBox title="High-Risk Symptoms">
+            <div style={{ marginBottom: 22 }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>Chest pain</div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                }}
+              >
+                <OptionButton
+                  label="No"
+                  active={!chestPain}
+                  onClick={() => setChestPain(false)}
+                />
+                <OptionButton
+                  label="Yes"
+                  active={chestPain}
+                  onClick={() => setChestPain(true)}
+                />
+              </div>
             </div>
-          </div>
 
-          <div style={{ marginBottom: 22 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>
-              Shortness of breath
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Shortness of breath
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                }}
+              >
+                <OptionButton
+                  label="None"
+                  active={shortnessOfBreath === "none"}
+                  onClick={() => setShortnessOfBreath("none")}
+                />
+                <OptionButton
+                  label="With activity"
+                  active={shortnessOfBreath === "activity"}
+                  onClick={() => setShortnessOfBreath("activity")}
+                />
+                <OptionButton
+                  label="At rest"
+                  active={shortnessOfBreath === "rest"}
+                  onClick={() => setShortnessOfBreath("rest")}
+                />
+              </div>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                gridTemplateColumns: "repeat(3, 1fr)",
-              }}
-            >
-              <OptionButton
-                label="None"
-                active={shortnessOfBreath === "none"}
-                onClick={() => setShortnessOfBreath("none")}
-              />
-              <OptionButton
-                label="With activity"
-                active={shortnessOfBreath === "activity"}
-                onClick={() => setShortnessOfBreath("activity")}
-              />
-              <OptionButton
-                label="At rest"
-                active={shortnessOfBreath === "rest"}
-                onClick={() => setShortnessOfBreath("rest")}
-              />
-            </div>
-          </div>
+          </SectionBox>
 
-          <div style={{ marginBottom: 22 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>
-              Precipitating factor
+          <SectionBox title="Triggers (Optional)">
+            <div style={{ marginBottom: 22 }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Precipitating factor
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                }}
+              >
+                <OptionButton
+                  label="None"
+                  active={precipitatingFactor === "none"}
+                  onClick={() => setPrecipitatingFactor("none")}
+                />
+                <OptionButton
+                  label="Exertion"
+                  active={precipitatingFactor === "exertion"}
+                  onClick={() => setPrecipitatingFactor("exertion")}
+                />
+                <OptionButton
+                  label="Stress"
+                  active={precipitatingFactor === "stress"}
+                  onClick={() => setPrecipitatingFactor("stress")}
+                />
+                <OptionButton
+                  label="Missed meds"
+                  active={precipitatingFactor === "missed_meds"}
+                  onClick={() => setPrecipitatingFactor("missed_meds")}
+                />
+                <OptionButton
+                  label="Unknown"
+                  active={precipitatingFactor === "unknown"}
+                  onClick={() => setPrecipitatingFactor("unknown")}
+                />
+              </div>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                gridTemplateColumns: "repeat(3, 1fr)",
-              }}
-            >
-              <OptionButton
-                label="None"
-                active={precipitatingFactor === "none"}
-                onClick={() => setPrecipitatingFactor("none")}
-              />
-              <OptionButton
-                label="Exertion"
-                active={precipitatingFactor === "exertion"}
-                onClick={() => setPrecipitatingFactor("exertion")}
-              />
-              <OptionButton
-                label="Stress"
-                active={precipitatingFactor === "stress"}
-                onClick={() => setPrecipitatingFactor("stress")}
-              />
-              <OptionButton
-                label="Missed meds"
-                active={precipitatingFactor === "missed_meds"}
-                onClick={() => setPrecipitatingFactor("missed_meds")}
-              />
-              <OptionButton
-                label="Unknown"
-                active={precipitatingFactor === "unknown"}
-                onClick={() => setPrecipitatingFactor("unknown")}
-              />
-            </div>
-          </div>
 
-          <div style={{ marginBottom: 24 }}>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: 14,
-                border: "1px solid #d1d5db",
-                borderRadius: 12,
-                background: "#f8fafc",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={clinicContactMe}
-                onChange={(e) => setClinicContactMe(e.target.checked)}
-              />
-              <span>Have clinic contact me</span>
-            </label>
-          </div>
+            <div>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: 14,
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  background: "white",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={clinicContactMe}
+                  onChange={(e) => setClinicContactMe(e.target.checked)}
+                />
+                <span>Have clinic contact me</span>
+              </label>
+            </div>
+          </SectionBox>
 
           <div style={{ display: "flex", gap: 12 }}>
             <button
@@ -876,7 +930,7 @@ export default function HomePage() {
               style={{
                 padding: "12px 18px",
                 borderRadius: 10,
-                border: "1px solid #d1d5db",
+                border: "1px solid #e5e7eb",
                 background: "white",
                 color: "#111827",
                 cursor: "pointer",
@@ -896,6 +950,13 @@ export default function HomePage() {
                 color: "white",
                 cursor: "pointer",
                 fontWeight: 700,
+                letterSpacing: 0.2,
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.opacity = "0.92";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.opacity = "1";
               }}
             >
               Submit Check-In
@@ -916,7 +977,11 @@ export default function HomePage() {
             boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
           }}
         >
-          <h1 style={{ fontSize: 30, marginBottom: 12 }}>Check-In Saved</h1>
+          <h1 style={{ fontSize: 30, marginBottom: 8 }}>
+            {savedRecord.status === "urgent" && "⚠️ We Recommend Follow-Up"}
+            {savedRecord.status === "attention" && "We’ll Review Your Symptoms"}
+            {savedRecord.status === "stable" && "Everything Looks Good Today"}
+          </h1>
 
           <div
             style={{
@@ -956,13 +1021,45 @@ export default function HomePage() {
             {savedRecord.summary}
           </div>
 
+          {savedRecord.status === "urgent" && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 16,
+                borderRadius: 12,
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#991b1b",
+                fontWeight: 600,
+              }}
+            >
+              Please contact your care team or seek urgent evaluation if
+              symptoms worsen.
+            </div>
+          )}
+
+          {savedRecord.status === "attention" && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 16,
+                borderRadius: 12,
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
+                color: "#92400e",
+              }}
+            >
+              Your care team may follow up based on your symptoms.
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
             <button
               onClick={startNewCheckIn}
               style={{
                 padding: "12px 18px",
                 borderRadius: 10,
-                border: "1px solid #d1d5db",
+                border: "1px solid #e5e7eb",
                 background: "white",
                 color: "#111827",
                 cursor: "pointer",

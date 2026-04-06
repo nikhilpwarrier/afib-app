@@ -60,15 +60,6 @@ function saveDashboardMeta(meta: DashboardMeta) {
   localStorage.setItem(DASHBOARD_META_KEY, JSON.stringify(meta));
 }
 
-function formatTime(value: number) {
-  return new Date(value).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 function severityLabel(status: Status) {
   if (status === "urgent") return "Urgent";
   if (status === "attention") return "Needs Attention";
@@ -159,7 +150,9 @@ function sortPatients(patients: PatientRecord[], meta: DashboardMeta) {
     };
 
     if (aMeta.outreachStatus !== bMeta.outreachStatus) {
-      return outreachRank[aMeta.outreachStatus] - outreachRank[bMeta.outreachStatus];
+      return (
+        outreachRank[aMeta.outreachStatus] - outreachRank[bMeta.outreachStatus]
+      );
     }
 
     if (a.status !== b.status) {
@@ -168,6 +161,15 @@ function sortPatients(patients: PatientRecord[], meta: DashboardMeta) {
 
     return b.updatedAt - a.updatedAt;
   });
+}
+
+function timeAgo(timestamp: number) {
+  const diff = Math.floor((Date.now() - timestamp) / 1000);
+
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 function ActionButton({
@@ -230,10 +232,15 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const sortedPatients = useMemo(() => sortPatients(patients, meta), [patients, meta]);
+  const sortedPatients = useMemo(
+    () => sortPatients(patients, meta),
+    [patients, meta]
+  );
 
   const openAlerts = sortedPatients.filter(
-    (p) => (meta[p.id]?.outreachStatus || "new") !== "resolved" && p.status !== "stable"
+    (p) =>
+      (meta[p.id]?.outreachStatus || "new") !== "resolved" &&
+      p.status !== "stable"
   );
 
   const urgentAlerts = openAlerts.filter((p) => p.status === "urgent");
@@ -267,7 +274,7 @@ export default function DashboardPage() {
         minHeight: "100vh",
         background: "#f8fafc",
         padding: 24,
-        color: "#111111",
+        color: "#111827",
         fontFamily: "Arial, sans-serif",
       }}
     >
@@ -533,14 +540,37 @@ function PatientCard({
           }}
         >
           <div>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>
+            <div
+              style={{
+                fontSize: 24,
+                fontWeight: 800,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
               {patient.studyCode}
+              {outreachStatus === "new" && (
+                <span
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    background: "#e0f2fe",
+                    color: "#0369a1",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  NEW
+                </span>
+              )}
             </div>
             <div style={{ color: "#64748b", marginTop: 4 }}>
               Post-ablation • Week {patient.weeksSinceAblation}
             </div>
             <div style={{ color: "#64748b", marginTop: 4 }}>
-              Updated {formatTime(patient.updatedAt)}
+              Updated {timeAgo(patient.updatedAt)}
             </div>
           </div>
 
