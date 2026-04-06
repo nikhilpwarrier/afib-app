@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Step = "register" | "start" | "symptoms" | "result";
-
 type Status = "urgent" | "attention" | "stable";
 
 type Registration = {
@@ -21,7 +20,12 @@ type PatientRecord = {
   duration: "under_5" | "5_30" | "over_30" | "none";
   chestPain: boolean;
   shortnessOfBreath: "none" | "activity" | "rest";
-  precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "unknown";
+  precipitatingFactor:
+    | "none"
+    | "exertion"
+    | "stress"
+    | "missed_meds"
+    | "unknown";
   clinicContactMe: boolean;
   status: Status;
   summary: string;
@@ -107,7 +111,12 @@ function buildSummary(input: {
   duration: "under_5" | "5_30" | "over_30" | "none";
   chestPain: boolean;
   shortnessOfBreath: "none" | "activity" | "rest";
-  precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "unknown";
+  precipitatingFactor:
+    | "none"
+    | "exertion"
+    | "stress"
+    | "missed_meds"
+    | "unknown";
   clinicContactMe: boolean;
 }): string {
   if (input.noSymptoms) return "No symptoms reported today.";
@@ -216,9 +225,9 @@ export default function HomePage() {
   const [palpitations, setPalpitations] = useState<
     "none" | "mild" | "moderate" | "severe"
   >("none");
-  const [duration, setDuration] = useState<"under_5" | "5_30" | "over_30" | "none">(
-    "none"
-  );
+  const [duration, setDuration] = useState<
+    "under_5" | "5_30" | "over_30" | "none"
+  >("none");
   const [chestPain, setChestPain] = useState(false);
   const [shortnessOfBreath, setShortnessOfBreath] = useState<
     "none" | "activity" | "rest"
@@ -352,7 +361,7 @@ export default function HomePage() {
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <div style={{ maxWidth: 680, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
         <div
           style={{
             display: "flex",
@@ -362,7 +371,7 @@ export default function HomePage() {
             paddingBottom: 12,
           }}
         >
-          <div style={{ fontWeight: "bold" }}>AFib Care</div>
+          <div style={{ fontWeight: "bold" }}>AtriaCare</div>
           <div style={{ display: "flex", gap: 16 }}>
             <a href="/" style={{ textDecoration: "none", color: "black" }}>
               Check-In
@@ -379,86 +388,178 @@ export default function HomePage() {
         {step === "register" && (
           <div
             style={{
+              display: "grid",
+              gridTemplateColumns: "1.1fr 0.9fr",
+              minHeight: "calc(100vh - 120px)",
+              borderRadius: 20,
+              overflow: "hidden",
               border: "1px solid #e5e5e5",
-              borderRadius: 16,
-              padding: 24,
+              background: "white",
             }}
           >
-            <h1 style={{ fontSize: 32, marginBottom: 8 }}>
-              Patient Registration
-            </h1>
-            <p style={{ color: "#666", marginBottom: 24 }}>
-              Enter study code and ablation date.
-            </p>
-
-            <div style={{ marginBottom: 16 }}>
-              <label
-                style={{ display: "block", fontSize: 14, marginBottom: 6 }}
-              >
-                Study Code
-              </label>
-              <input
-                value={studyCode}
-                onChange={(e) => setStudyCode(e.target.value)}
-                placeholder="PT1"
-                style={{
-                  width: "100%",
-                  padding: 12,
-                  borderRadius: 10,
-                  border: "1px solid #d4d4d4",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label
-                style={{ display: "block", fontSize: 14, marginBottom: 6 }}
-              >
-                Date of Ablation
-              </label>
-              <input
-                type="date"
-                value={ablationDate}
-                onChange={(e) => setAblationDate(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: 12,
-                  borderRadius: 10,
-                  border: "1px solid #d4d4d4",
-                }}
-              />
-            </div>
-
-            {ablationDate && (
-              <div
-                style={{
-                  marginBottom: 20,
-                  padding: 12,
-                  borderRadius: 10,
-                  background: "#f8f8f8",
-                  border: "1px solid #ececec",
-                }}
-              >
-                Weeks since ablation: <strong>{weeksSinceAblation}</strong>
-              </div>
-            )}
-
-            <button
-              onClick={handleRegistrationContinue}
-              disabled={!studyCode.trim() || !ablationDate}
+            <div
               style={{
-                padding: "12px 18px",
-                borderRadius: 10,
-                border: "none",
-                background: "black",
+                background:
+                  "linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 55%, #172554 100%)",
                 color: "white",
-                cursor: !studyCode.trim() || !ablationDate ? "not-allowed" : "pointer",
-                opacity: !studyCode.trim() || !ablationDate ? 0.5 : 1,
-                fontWeight: 600,
+                padding: 48,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
               }}
             >
-              Continue
-            </button>
+              <div style={{ fontSize: 34, fontWeight: 800, marginBottom: 20 }}>
+                AtriaCare
+              </div>
+
+              <div
+                style={{
+                  fontSize: 38,
+                  lineHeight: 1.15,
+                  fontWeight: 700,
+                  maxWidth: 460,
+                  marginBottom: 18,
+                }}
+              >
+                Post-Ablation Recovery Monitoring
+              </div>
+
+              <div
+                style={{
+                  fontSize: 18,
+                  lineHeight: 1.5,
+                  opacity: 0.92,
+                  maxWidth: 440,
+                }}
+              >
+                Daily symptom check-ins designed to support early recovery after
+                AF ablation and streamline follow-up workflow.
+              </div>
+
+              <div
+                style={{
+                  marginTop: 42,
+                  fontSize: 14,
+                  opacity: 0.8,
+                  maxWidth: 420,
+                }}
+              >
+                Patient-reported symptoms, simple triage, and actionable
+                clinical follow-up.
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 40,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                background: "#ffffff",
+              }}
+            >
+              <div style={{ maxWidth: 420, width: "100%", margin: "0 auto" }}>
+                <div style={{ marginBottom: 28 }}>
+                  <div
+                    style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}
+                  >
+                    Begin Check-In
+                  </div>
+                  <div style={{ color: "#666", fontSize: 15 }}>
+                    Enter your study code and ablation date to continue.
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: 14,
+                      marginBottom: 8,
+                      fontWeight: 600,
+                      color: "#222",
+                    }}
+                  >
+                    Study Code
+                  </label>
+                  <input
+                    value={studyCode}
+                    onChange={(e) => setStudyCode(e.target.value)}
+                    placeholder="PT1"
+                    style={{
+                      width: "100%",
+                      padding: 14,
+                      borderRadius: 12,
+                      border: "1px solid #d4d4d4",
+                      fontSize: 15,
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: 14,
+                      marginBottom: 8,
+                      fontWeight: 600,
+                      color: "#222",
+                    }}
+                  >
+                    Date of Ablation
+                  </label>
+                  <input
+                    type="date"
+                    value={ablationDate}
+                    onChange={(e) => setAblationDate(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: 14,
+                      borderRadius: 12,
+                      border: "1px solid #d4d4d4",
+                      fontSize: 15,
+                    }}
+                  />
+                </div>
+
+                {ablationDate && (
+                  <div
+                    style={{
+                      marginBottom: 22,
+                      padding: 14,
+                      borderRadius: 12,
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      fontSize: 15,
+                    }}
+                  >
+                    Weeks since ablation: <strong>{weeksSinceAblation}</strong>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleRegistrationContinue}
+                  disabled={!studyCode.trim() || !ablationDate}
+                  style={{
+                    width: "100%",
+                    padding: "14px 18px",
+                    borderRadius: 12,
+                    border: "none",
+                    background: "#1d4ed8",
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: 15,
+                    cursor:
+                      !studyCode.trim() || !ablationDate
+                        ? "not-allowed"
+                        : "pointer",
+                    opacity: !studyCode.trim() || !ablationDate ? 0.5 : 1,
+                  }}
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -468,6 +569,8 @@ export default function HomePage() {
               border: "1px solid #e5e5e5",
               borderRadius: 16,
               padding: 24,
+              maxWidth: 760,
+              margin: "0 auto",
             }}
           >
             <div style={{ marginBottom: 16 }}>
@@ -539,6 +642,8 @@ export default function HomePage() {
               border: "1px solid #e5e5e5",
               borderRadius: 16,
               padding: 24,
+              maxWidth: 860,
+              margin: "0 auto",
             }}
           >
             <h1 style={{ fontSize: 30, marginBottom: 8 }}>Symptom Details</h1>
@@ -547,8 +652,16 @@ export default function HomePage() {
             </p>
 
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontWeight: 600, marginBottom: 10 }}>Palpitations</div>
-              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(4, 1fr)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                Palpitations
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                }}
+              >
                 <OptionButton
                   label="None"
                   active={palpitations === "none"}
@@ -576,8 +689,16 @@ export default function HomePage() {
             </div>
 
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontWeight: 600, marginBottom: 10 }}>Duration of symptoms</div>
-              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                Duration of symptoms
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                }}
+              >
                 <OptionButton
                   label="< 5 min"
                   active={duration === "under_5"}
@@ -597,8 +718,16 @@ export default function HomePage() {
             </div>
 
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontWeight: 600, marginBottom: 10 }}>Chest pain</div>
-              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(2, 1fr)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                Chest pain
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                }}
+              >
                 <OptionButton
                   label="No"
                   active={!chestPain}
@@ -613,8 +742,16 @@ export default function HomePage() {
             </div>
 
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontWeight: 600, marginBottom: 10 }}>Shortness of breath</div>
-              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                Shortness of breath
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                }}
+              >
                 <OptionButton
                   label="None"
                   active={shortnessOfBreath === "none"}
@@ -634,8 +771,16 @@ export default function HomePage() {
             </div>
 
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontWeight: 600, marginBottom: 10 }}>Precipitating factor</div>
-              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(3, 1fr)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                Precipitating factor
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                }}
+              >
                 <OptionButton
                   label="None"
                   active={precipitatingFactor === "none"}
@@ -724,11 +869,11 @@ export default function HomePage() {
               border: `2px solid ${statusColor(savedRecord.status)}`,
               borderRadius: 16,
               padding: 24,
+              maxWidth: 760,
+              margin: "0 auto",
             }}
           >
-            <h1 style={{ fontSize: 30, marginBottom: 12 }}>
-              Check-In Saved
-            </h1>
+            <h1 style={{ fontSize: 30, marginBottom: 12 }}>Check-In Saved</h1>
 
             <div
               style={{
@@ -746,7 +891,8 @@ export default function HomePage() {
             </div>
 
             <div style={{ marginBottom: 8 }}>
-              Weeks since ablation: <strong>{savedRecord.weeksSinceAblation}</strong>
+              Weeks since ablation:{" "}
+              <strong>{savedRecord.weeksSinceAblation}</strong>
             </div>
 
             <div

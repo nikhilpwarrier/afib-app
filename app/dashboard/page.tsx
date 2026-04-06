@@ -15,7 +15,12 @@ type PatientRecord = {
   duration: "under_5" | "5_30" | "over_30" | "none";
   chestPain: boolean;
   shortnessOfBreath: "none" | "activity" | "rest";
-  precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "unknown";
+  precipitatingFactor:
+    | "none"
+    | "exertion"
+    | "stress"
+    | "missed_meds"
+    | "unknown";
   clinicContactMe: boolean;
   status: Status;
   summary: string;
@@ -90,16 +95,21 @@ function severityBorder(status: Status) {
 
 function outreachLabel(status: OutreachStatus) {
   if (status === "attempted") return "Attempted";
-  if (status === "called") return "Called Patient";
+  if (status === "called") return "Reached";
   if (status === "resolved") return "Resolved";
-  return "New Alert";
+  return "New";
 }
 
 function buildAlertReason(patient: PatientRecord) {
   if (patient.status === "urgent") {
     if (patient.chestPain) return "Chest pain reported";
-    if (patient.shortnessOfBreath === "rest") return "Shortness of breath at rest";
-    if (patient.palpitations === "severe" && patient.duration === "over_30") {
+    if (patient.shortnessOfBreath === "rest") {
+      return "Shortness of breath at rest";
+    }
+    if (
+      patient.palpitations === "severe" &&
+      patient.duration === "over_30"
+    ) {
       return "Severe palpitations > 30 minutes";
     }
     return "High-risk symptoms";
@@ -107,9 +117,15 @@ function buildAlertReason(patient: PatientRecord) {
 
   if (patient.status === "attention") {
     if (patient.clinicContactMe) return "Requested clinic contact";
-    if (patient.shortnessOfBreath === "activity") return "Shortness of breath with activity";
-    if (patient.palpitations === "moderate") return "Moderate palpitations";
-    if (patient.palpitations === "severe") return "Severe palpitations";
+    if (patient.shortnessOfBreath === "activity") {
+      return "Shortness of breath with activity";
+    }
+    if (patient.palpitations === "moderate") {
+      return "Moderate palpitations";
+    }
+    if (patient.palpitations === "severe") {
+      return "Severe palpitations";
+    }
     if (patient.duration === "5_30") return "Symptoms 5–30 minutes";
     if (patient.duration === "over_30") return "Symptoms > 30 minutes";
     return "Needs follow-up";
@@ -133,8 +149,14 @@ function sortPatients(patients: PatientRecord[], meta: DashboardMeta) {
   };
 
   return [...patients].sort((a, b) => {
-    const aMeta = meta[a.id] || { outreachStatus: "new" as OutreachStatus, notes: "" };
-    const bMeta = meta[b.id] || { outreachStatus: "new" as OutreachStatus, notes: "" };
+    const aMeta = meta[a.id] || {
+      outreachStatus: "new" as OutreachStatus,
+      notes: "",
+    };
+    const bMeta = meta[b.id] || {
+      outreachStatus: "new" as OutreachStatus,
+      notes: "",
+    };
 
     if (aMeta.outreachStatus !== bMeta.outreachStatus) {
       return outreachRank[aMeta.outreachStatus] - outreachRank[bMeta.outreachStatus];
@@ -164,9 +186,9 @@ function ActionButton({
       style={{
         padding: "8px 12px",
         borderRadius: 999,
-        border: active ? "1px solid black" : "1px solid #d4d4d4",
-        background: active ? "black" : "white",
-        color: active ? "white" : "black",
+        border: active ? "1px solid #111827" : "1px solid #d4d4d4",
+        background: active ? "#111827" : "white",
+        color: active ? "white" : "#111827",
         cursor: "pointer",
         fontSize: 13,
         fontWeight: 600,
@@ -243,41 +265,66 @@ export default function DashboardPage() {
     <main
       style={{
         minHeight: "100vh",
-        background: "#ffffff",
+        background: "#f8fafc",
         padding: 24,
         color: "#111111",
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             marginBottom: 24,
-            borderBottom: "1px solid #e5e5e5",
-            paddingBottom: 12,
+            borderBottom: "1px solid #e5e7eb",
+            paddingBottom: 14,
             alignItems: "center",
           }}
         >
-          <div style={{ fontWeight: "bold" }}>AFib Care</div>
-          <div style={{ display: "flex", gap: 16 }}>
-            <a href="/" style={{ textDecoration: "none", color: "black" }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 18 }}>AtriaCare</div>
+            <div style={{ color: "#64748b", fontSize: 13, marginTop: 2 }}>
+              Post-Ablation Alert Dashboard
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <a href="/" style={{ textDecoration: "none", color: "#111827" }}>
               Check-In
             </a>
             <a
               href="/dashboard"
-              style={{ textDecoration: "none", color: "black", fontWeight: 700 }}
+              style={{
+                textDecoration: "none",
+                color: "#111827",
+                fontWeight: 700,
+              }}
             >
               Dashboard
             </a>
+            <button
+              type="button"
+              onClick={refresh}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                background: "white",
+                color: "#111827",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Refresh
+            </button>
           </div>
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 32, marginBottom: 8 }}>Care Team Dashboard</h1>
-          <div style={{ color: "#666" }}>
-            Alert queue and outreach workflow
+          <h1 style={{ fontSize: 32, marginBottom: 8 }}>Alert Queue</h1>
+          <div style={{ color: "#64748b" }}>
+            Prioritize outreach, review symptoms, and document follow-up.
           </div>
         </div>
 
@@ -286,7 +333,7 @@ export default function DashboardPage() {
             display: "grid",
             gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
             gap: 14,
-            marginBottom: 24,
+            marginBottom: 28,
           }}
         >
           <SummaryCard
@@ -311,7 +358,7 @@ export default function DashboardPage() {
             border="#bfdbfe"
           />
           <SummaryCard
-            label="Completed"
+            label="Resolved"
             value={completedToday.length}
             valueColor="#16a34a"
             background="#f0fdf4"
@@ -319,12 +366,15 @@ export default function DashboardPage() {
           />
         </div>
 
-        <SectionTitle title="Active Alerts" subtitle="Patients needing action now" />
+        <SectionTitle
+          title="Active Alerts"
+          subtitle="Patients needing action now"
+        />
 
         {openAlerts.length === 0 ? (
           <EmptyState text="No active alerts right now." />
         ) : (
-          <div style={{ display: "grid", gap: 16, marginBottom: 30 }}>
+          <div style={{ display: "grid", gap: 16, marginBottom: 32 }}>
             {openAlerts.map((patient) => (
               <PatientCard
                 key={patient.id}
@@ -337,7 +387,10 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <SectionTitle title="Completed / Resolved" subtitle="Handled alerts" />
+        <SectionTitle
+          title="Completed / Resolved"
+          subtitle="Handled alerts"
+        />
 
         {completedToday.length === 0 ? (
           <EmptyState text="No resolved alerts yet." />
@@ -377,12 +430,17 @@ function SummaryCard({
       style={{
         border: `1px solid ${border}`,
         background,
-        borderRadius: 14,
-        padding: 16,
+        borderRadius: 16,
+        padding: 18,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
       }}
     >
-      <div style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 800, color: valueColor }}>{value}</div>
+      <div style={{ color: "#64748b", fontSize: 13, marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: valueColor }}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -397,7 +455,7 @@ function SectionTitle({
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 22, fontWeight: 700 }}>{title}</div>
-      <div style={{ color: "#666", marginTop: 4 }}>{subtitle}</div>
+      <div style={{ color: "#64748b", marginTop: 4 }}>{subtitle}</div>
     </div>
   );
 }
@@ -406,11 +464,12 @@ function EmptyState({ text }: { text: string }) {
   return (
     <div
       style={{
-        border: "1px solid #e5e5e5",
-        borderRadius: 14,
+        border: "1px solid #e5e7eb",
+        borderRadius: 16,
         padding: 18,
-        color: "#666",
+        color: "#64748b",
         marginBottom: 30,
+        background: "white",
       }}
     >
       {text}
@@ -427,7 +486,10 @@ function PatientCard({
   patient: PatientRecord;
   outreachStatus: OutreachStatus;
   notes: string;
-  onUpdateMeta: (id: string, patch: { outreachStatus?: OutreachStatus; notes?: string }) => void;
+  onUpdateMeta: (
+    id: string,
+    patch: { outreachStatus?: OutreachStatus; notes?: string }
+  ) => void;
 }) {
   const [localNotes, setLocalNotes] = useState(notes);
 
@@ -440,125 +502,155 @@ function PatientCard({
   return (
     <div
       style={{
-        border: `1px solid ${severityBorder(patient.status)}`,
-        background: severityBg(patient.status),
-        borderRadius: 16,
+        position: "relative",
+        border: "1px solid #e5e7eb",
+        background: "white",
+        borderRadius: 18,
         padding: 18,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        overflow: "hidden",
       }}
     >
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 16,
-          alignItems: "flex-start",
-          marginBottom: 12,
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 6,
+          background: severityColor(patient.status),
         }}
-      >
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800 }}>{patient.studyCode}</div>
-          <div style={{ color: "#666", marginTop: 4 }}>
-            Post-ablation • Week {patient.weeksSinceAblation}
+      />
+
+      <div style={{ paddingLeft: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 16,
+            alignItems: "flex-start",
+            marginBottom: 14,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>
+              {patient.studyCode}
+            </div>
+            <div style={{ color: "#64748b", marginTop: 4 }}>
+              Post-ablation • Week {patient.weeksSinceAblation}
+            </div>
+            <div style={{ color: "#64748b", marginTop: 4 }}>
+              Updated {formatTime(patient.updatedAt)}
+            </div>
           </div>
-          <div style={{ color: "#666", marginTop: 4 }}>
-            Updated {formatTime(patient.updatedAt)}
+
+          <div
+            style={{
+              background: severityBg(patient.status),
+              border: `1px solid ${severityBorder(patient.status)}`,
+              color: severityColor(patient.status),
+              borderRadius: 999,
+              padding: "8px 12px",
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {severityLabel(patient.status)}
           </div>
         </div>
 
         <div
           style={{
-            background: "white",
-            border: `1px solid ${severityBorder(patient.status)}`,
-            color: severityColor(patient.status),
-            borderRadius: 999,
-            padding: "8px 12px",
-            fontWeight: 700,
-            whiteSpace: "nowrap",
+            background: "#f8fafc",
+            borderRadius: 14,
+            border: "1px solid #e5e7eb",
+            padding: 14,
+            marginBottom: 14,
           }}
         >
-          {severityLabel(patient.status)}
+          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+            Alert Reason
+          </div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>{reason}</div>
+          <div style={{ color: "#334155", lineHeight: 1.5 }}>
+            {patient.summary}
+          </div>
         </div>
-      </div>
 
-      <div
-        style={{
-          background: "white",
-          borderRadius: 12,
-          border: "1px solid #ececec",
-          padding: 14,
-          marginBottom: 14,
-        }}
-      >
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Alert Reason</div>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>{reason}</div>
-        <div style={{ color: "#333", lineHeight: 1.5 }}>{patient.summary}</div>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
-          Outreach Status
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
+            Outreach Status
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <ActionButton
+              label="New"
+              active={outreachStatus === "new"}
+              onClick={() => onUpdateMeta(patient.id, { outreachStatus: "new" })}
+            />
+            <ActionButton
+              label="Attempted"
+              active={outreachStatus === "attempted"}
+              onClick={() =>
+                onUpdateMeta(patient.id, { outreachStatus: "attempted" })
+              }
+            />
+            <ActionButton
+              label="Reached"
+              active={outreachStatus === "called"}
+              onClick={() =>
+                onUpdateMeta(patient.id, { outreachStatus: "called" })
+              }
+            />
+            <ActionButton
+              label="Resolved"
+              active={outreachStatus === "resolved"}
+              onClick={() =>
+                onUpdateMeta(patient.id, { outreachStatus: "resolved" })
+              }
+            />
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <ActionButton
-            label="New Alert"
-            active={outreachStatus === "new"}
-            onClick={() => onUpdateMeta(patient.id, { outreachStatus: "new" })}
-          />
-          <ActionButton
-            label="Attempted"
-            active={outreachStatus === "attempted"}
-            onClick={() => onUpdateMeta(patient.id, { outreachStatus: "attempted" })}
-          />
-          <ActionButton
-            label="Called Patient"
-            active={outreachStatus === "called"}
-            onClick={() => onUpdateMeta(patient.id, { outreachStatus: "called" })}
-          />
-          <ActionButton
-            label="Resolved"
-            active={outreachStatus === "resolved"}
-            onClick={() => onUpdateMeta(patient.id, { outreachStatus: "resolved" })}
-          />
-        </div>
-      </div>
 
-      <div>
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>Care Team Notes</div>
-        <textarea
-          value={localNotes}
-          onChange={(e) => setLocalNotes(e.target.value)}
-          placeholder="Document callback attempt, recommendations, follow-up plan..."
-          style={{
-            width: "100%",
-            minHeight: 90,
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid #d4d4d4",
-            resize: "vertical",
-            fontFamily: "Arial, sans-serif",
-          }}
-        />
-        <div style={{ marginTop: 10 }}>
-          <button
-            type="button"
-            onClick={() => onUpdateMeta(patient.id, { notes: localNotes })}
+        <div>
+          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
+            Care Team Notes
+          </div>
+          <textarea
+            value={localNotes}
+            onChange={(e) => setLocalNotes(e.target.value)}
+            placeholder="Document callback attempt, recommendations, follow-up plan..."
             style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "none",
-              background: "black",
-              color: "white",
-              cursor: "pointer",
-              fontWeight: 600,
+              width: "100%",
+              minHeight: 90,
+              padding: 12,
+              borderRadius: 12,
+              border: "1px solid #d4d4d4",
+              resize: "vertical",
+              fontFamily: "Arial, sans-serif",
             }}
-          >
-            Save Note
-          </button>
+          />
+          <div style={{ marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => onUpdateMeta(patient.id, { notes: localNotes })}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "none",
+                background: "#111827",
+                color: "white",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Save Note
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div style={{ marginTop: 12, color: "#666", fontSize: 13 }}>
-        Current workflow status: <strong>{outreachLabel(outreachStatus)}</strong>
+        <div style={{ marginTop: 12, color: "#64748b", fontSize: 13 }}>
+          Current workflow status: <strong>{outreachLabel(outreachStatus)}</strong>
+        </div>
       </div>
     </div>
   );
