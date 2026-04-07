@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 type Step = "register" | "start" | "symptoms" | "result";
 type Status = "urgent" | "attention" | "stable";
@@ -10,8 +11,8 @@ type Registration = {
   ablationDate: string;
 };
 
-type PatientRecord = {
-  id: string;
+type SavedRecord = {
+  id?: string;
   studyCode: string;
   ablationDate: string;
   weeksSinceAblation: number;
@@ -29,10 +30,9 @@ type PatientRecord = {
   clinicContactMe: boolean;
   status: Status;
   summary: string;
-  updatedAt: number;
+  created_at?: string;
 };
 
-const STORAGE_KEY = "patients";
 const PROFILE_KEY = "afib_registration";
 
 function getWeeksSinceAblation(ablationDate: string): number {
@@ -57,20 +57,6 @@ function loadRegistration(): Registration | null {
   } catch {
     return null;
   }
-}
-
-function loadPatients(): PatientRecord[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePatientRecord(record: PatientRecord) {
-  const existing = loadPatients();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([record, ...existing]));
 }
 
 function getStatus(input: {
@@ -214,18 +200,11 @@ function OptionButton({
       style={{
         padding: "12px 16px",
         borderRadius: 12,
-        border: active ? "1px solid #111827" : "1px solid #e5e7eb",
+        border: active ? "1px solid #111827" : "1px solid #d4d4d4",
         background: active ? "#111827" : "white",
         color: active ? "white" : "#111827",
-        fontWeight: 700,
-        letterSpacing: 0.2,
+        fontWeight: 600,
         cursor: "pointer",
-      }}
-      onMouseOver={(e) => {
-        e.currentTarget.style.opacity = "0.92";
-      }}
-      onMouseOut={(e) => {
-        e.currentTarget.style.opacity = "1";
       }}
     >
       {label}
@@ -281,42 +260,14 @@ function TopNav() {
         >
           Check-In
         </a>
-        <a
-          href="/dashboard"
-          style={{ textDecoration: "none", color: "#111827" }}
-        >
-          Dashboard
-        </a>
       </div>
-    </div>
-  );
-}
-
-function SectionBox({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        padding: 16,
-        borderRadius: 14,
-        border: "1px solid #e5e7eb",
-        marginBottom: 20,
-        background: "#fafafa",
-      }}
-    >
-      <h2 style={{ fontSize: 18, marginBottom: 12 }}>{title}</h2>
-      {children}
     </div>
   );
 }
 
 export default function HomePage() {
   const [step, setStep] = useState<Step>("register");
+  const [submitting, setSubmitting] = useState(false);
 
   const [studyCode, setStudyCode] = useState("");
   const [ablationDate, setAblationDate] = useState("");
@@ -338,7 +289,7 @@ export default function HomePage() {
   >("none");
   const [clinicContactMe, setClinicContactMe] = useState(false);
 
-  const [savedRecord, setSavedRecord] = useState<PatientRecord | null>(null);
+  const [savedRecord, setSavedRecord] = useState<SavedRecord | null>(null);
 
   useEffect(() => {
     const existing = loadRegistration();
@@ -364,13 +315,50 @@ export default function HomePage() {
     setStep("start");
   }
 
-  function handleNoSymptoms() {
-    const normalizedCode = studyCode.trim().toUpperCase();
-    const status: Status = "stable";
-    const summary = "No symptoms reported today.";
+  async function saveCheckin(record: SavedRecord) {
+    setSubmitting(true);
 
-    const record: PatientRecord = {
-      id: crypto.randomUUID(),
+    const payload = {
+      study_code: record.studyCode,
+      ablation_date: record.ablationDate,
+      weeks_since_ablation: record.weeksSinceAblation,
+      no_symptoms: record.noSymptoms,
+      palpitations: record.palpitations,
+      duration: record.duration,
+      chest_pain: record.chestPain,
+      shortness_of_breath: record.shortnessOfBreath,
+      precipitating_factor: record.precipitatingFactor,
+      clinic_contact_me: record.clinicContactMe,
+      status: record.status,
+      summary: record.summary,
+    };
+
+    const { data, error } = await supabase
+      .from("checkins")
+      .insert([payload])
+      .select()
+      .single();
+
+    setSubmitting(false);
+
+    if (error) {
+      console.error(error);
+      alert("Error saving check-in");
+      return;
+    }
+
+    setSavedRecord({
+      ...record,
+      id: data.id,
+      created_at: data.created_at,
+    });
+    setStep("result");
+  }
+
+  async function handleNoSymptoms() {
+    const normalizedCode = studyCode.trim().toUpperCase();
+
+    const record: SavedRecord = {
       studyCode: normalizedCode,
       ablationDate,
       weeksSinceAblation,
@@ -381,18 +369,15 @@ export default function HomePage() {
       shortnessOfBreath: "none",
       precipitatingFactor: "none",
       clinicContactMe: false,
-      status,
-      summary,
-      updatedAt: Date.now(),
+      status: "stable",
+      summary: "No symptoms reported today.",
     };
 
-    savePatientRecord(record);
-    setSavedRecord(record);
     setNoSymptoms(true);
-    setStep("result");
+    await saveCheckin(record);
   }
 
-  function handleSubmitSymptoms() {
+  async function handleSubmitSymptoms() {
     const normalizedCode = studyCode.trim().toUpperCase();
 
     const status = getStatus({
@@ -414,8 +399,7 @@ export default function HomePage() {
       clinicContactMe,
     });
 
-    const record: PatientRecord = {
-      id: crypto.randomUUID(),
+    const record: SavedRecord = {
       studyCode: normalizedCode,
       ablationDate,
       weeksSinceAblation,
@@ -428,12 +412,9 @@ export default function HomePage() {
       clinicContactMe,
       status,
       summary,
-      updatedAt: Date.now(),
     };
 
-    savePatientRecord(record);
-    setSavedRecord(record);
-    setStep("result");
+    await saveCheckin(record);
   }
 
   function resetSymptoms() {
@@ -560,7 +541,7 @@ export default function HomePage() {
                     width: "100%",
                     padding: 14,
                     borderRadius: 12,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid #d1d5db",
                     fontSize: 15,
                   }}
                 />
@@ -586,7 +567,7 @@ export default function HomePage() {
                     width: "100%",
                     padding: 14,
                     borderRadius: 12,
-                    border: "1px solid #e5e7eb",
+                    border: "1px solid #d1d5db",
                     fontSize: 15,
                   }}
                 />
@@ -618,22 +599,12 @@ export default function HomePage() {
                   background: "#1d4ed8",
                   color: "white",
                   fontWeight: 700,
-                  letterSpacing: 0.2,
                   fontSize: 15,
                   cursor:
                     !studyCode.trim() || !ablationDate
                       ? "not-allowed"
                       : "pointer",
                   opacity: !studyCode.trim() || !ablationDate ? 0.5 : 1,
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.opacity = "0.92";
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.opacity = !studyCode.trim() ||
-                    !ablationDate
-                    ? "0.5"
-                    : "1";
                 }}
               >
                 Continue
@@ -670,6 +641,7 @@ export default function HomePage() {
           <div style={{ display: "grid", gap: 12 }}>
             <button
               onClick={handleNoSymptoms}
+              disabled={submitting}
               style={{
                 padding: "16px",
                 borderRadius: 12,
@@ -677,17 +649,11 @@ export default function HomePage() {
                 background: "#111827",
                 color: "white",
                 fontWeight: 700,
-                letterSpacing: 0.2,
-                cursor: "pointer",
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.opacity = "0.92";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.opacity = "1";
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.6 : 1,
               }}
             >
-              No symptoms today
+              {submitting ? "Submitting..." : "No symptoms today"}
             </button>
 
             <button
@@ -695,15 +661,16 @@ export default function HomePage() {
                 resetSymptoms();
                 setStep("symptoms");
               }}
+              disabled={submitting}
               style={{
                 padding: "16px",
                 borderRadius: 12,
-                border: "1px solid #e5e7eb",
+                border: "1px solid #d1d5db",
                 background: "white",
                 color: "#111827",
                 fontWeight: 700,
-                letterSpacing: 0.2,
-                cursor: "pointer",
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.6 : 1,
               }}
             >
               I have symptoms
@@ -711,17 +678,32 @@ export default function HomePage() {
 
             <button
               onClick={() => setStep("register")}
+              disabled={submitting}
               style={{
                 padding: "12px",
                 borderRadius: 10,
-                border: "1px solid #e5e7eb",
+                border: "1px solid #d1d5db",
                 background: "#f8fafc",
                 color: "#111827",
-                cursor: "pointer",
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.6 : 1,
               }}
             >
               Edit registration
             </button>
+          </div>
+
+          <div
+            style={{
+              marginTop: 18,
+              fontSize: 13,
+              color: "#64748b",
+              lineHeight: 1.5,
+            }}
+          >
+            If you are experiencing severe symptoms such as chest pain, severe
+            shortness of breath, or feel unsafe, call 911 or go to the nearest
+            emergency room.
           </div>
         </div>
       )}
@@ -743,9 +725,21 @@ export default function HomePage() {
             Tap the options that best match what you are having.
           </p>
 
-          <SectionBox title="Rhythm Symptoms">
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              border: "1px solid #e5e7eb",
+              marginBottom: 20,
+              background: "#fafafa",
+            }}
+          >
+            <h2 style={{ fontSize: 18, marginBottom: 10 }}>Rhythm Symptoms</h2>
+
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>Palpitations</div>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Palpitations
+              </div>
               <div
                 style={{
                   display: "grid",
@@ -779,7 +773,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div>
+            <div style={{ marginBottom: 6 }}>
               <div style={{ fontWeight: 700, marginBottom: 10 }}>
                 Duration of symptoms
               </div>
@@ -807,11 +801,25 @@ export default function HomePage() {
                 />
               </div>
             </div>
-          </SectionBox>
+          </div>
 
-          <SectionBox title="High-Risk Symptoms">
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              border: "1px solid #e5e7eb",
+              marginBottom: 20,
+              background: "#fafafa",
+            }}
+          >
+            <h2 style={{ fontSize: 18, marginBottom: 10 }}>
+              High-Risk Symptoms
+            </h2>
+
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>Chest pain</div>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Chest pain
+              </div>
               <div
                 style={{
                   display: "grid",
@@ -832,7 +840,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div>
+            <div style={{ marginBottom: 6 }}>
               <div style={{ fontWeight: 700, marginBottom: 10 }}>
                 Shortness of breath
               </div>
@@ -860,9 +868,21 @@ export default function HomePage() {
                 />
               </div>
             </div>
-          </SectionBox>
+          </div>
 
-          <SectionBox title="Triggers (Optional)">
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              border: "1px solid #e5e7eb",
+              marginBottom: 20,
+              background: "#fafafa",
+            }}
+          >
+            <h2 style={{ fontSize: 18, marginBottom: 10 }}>
+              Triggers (Optional)
+            </h2>
+
             <div style={{ marginBottom: 22 }}>
               <div style={{ fontWeight: 700, marginBottom: 10 }}>
                 Precipitating factor
@@ -909,7 +929,7 @@ export default function HomePage() {
                   alignItems: "center",
                   gap: 10,
                   padding: 14,
-                  border: "1px solid #e5e7eb",
+                  border: "1px solid #d1d5db",
                   borderRadius: 12,
                   background: "white",
                 }}
@@ -922,19 +942,21 @@ export default function HomePage() {
                 <span>Have clinic contact me</span>
               </label>
             </div>
-          </SectionBox>
+          </div>
 
           <div style={{ display: "flex", gap: 12 }}>
             <button
               onClick={() => setStep("start")}
+              disabled={submitting}
               style={{
                 padding: "12px 18px",
                 borderRadius: 10,
-                border: "1px solid #e5e7eb",
+                border: "1px solid #d1d5db",
                 background: "white",
                 color: "#111827",
-                cursor: "pointer",
+                cursor: submitting ? "not-allowed" : "pointer",
                 fontWeight: 600,
+                opacity: submitting ? 0.6 : 1,
               }}
             >
               Back
@@ -942,24 +964,19 @@ export default function HomePage() {
 
             <button
               onClick={handleSubmitSymptoms}
+              disabled={submitting}
               style={{
                 padding: "12px 18px",
                 borderRadius: 10,
                 border: "none",
                 background: "#111827",
                 color: "white",
-                cursor: "pointer",
+                cursor: submitting ? "not-allowed" : "pointer",
                 fontWeight: 700,
-                letterSpacing: 0.2,
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.opacity = "0.92";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.opacity = "1";
+                opacity: submitting ? 0.6 : 1,
               }}
             >
-              Submit Check-In
+              {submitting ? "Submitting..." : "Submit Check-In"}
             </button>
           </div>
         </div>
@@ -978,7 +995,7 @@ export default function HomePage() {
           }}
         >
           <h1 style={{ fontSize: 30, marginBottom: 8 }}>
-            {savedRecord.status === "urgent" && "⚠️ We Recommend Follow-Up"}
+            {savedRecord.status === "urgent" && "We Recommend Follow-Up"}
             {savedRecord.status === "attention" && "We’ll Review Your Symptoms"}
             {savedRecord.status === "stable" && "Everything Looks Good Today"}
           </h1>
@@ -1033,8 +1050,8 @@ export default function HomePage() {
                 fontWeight: 600,
               }}
             >
-              Please contact your care team or seek urgent evaluation if
-              symptoms worsen.
+              Please contact your care team or seek urgent evaluation if symptoms
+              worsen.
             </div>
           )}
 
@@ -1059,29 +1076,19 @@ export default function HomePage() {
               style={{
                 padding: "12px 18px",
                 borderRadius: 10,
-                border: "1px solid #e5e7eb",
+                border: "1px solid #d1d5db",
                 background: "white",
                 color: "#111827",
                 cursor: "pointer",
                 fontWeight: 600,
               }}
             >
-              New Check-In
+              New Check-In  
             </button>
 
             <a
               href="/dashboard"
-              style={{
-                display: "inline-block",
-                padding: "12px 18px",
-                borderRadius: 10,
-                background: "#111827",
-                color: "white",
-                textDecoration: "none",
-                fontWeight: 700,
-              }}
             >
-              Go to Dashboard
             </a>
           </div>
         </div>

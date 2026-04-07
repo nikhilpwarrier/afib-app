@@ -1,30 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 type Status = "urgent" | "attention" | "stable";
 type OutreachStatus = "new" | "attempted" | "called" | "resolved";
 
 type PatientRecord = {
   id: string;
-  studyCode: string;
-  ablationDate: string;
-  weeksSinceAblation: number;
-  noSymptoms: boolean;
+  study_code: string;
+  ablation_date: string;
+  weeks_since_ablation: number;
+  no_symptoms: boolean;
   palpitations: "none" | "mild" | "moderate" | "severe";
   duration: "under_5" | "5_30" | "over_30" | "none";
-  chestPain: boolean;
-  shortnessOfBreath: "none" | "activity" | "rest";
-  precipitatingFactor:
-    | "none"
-    | "exertion"
-    | "stress"
-    | "missed_meds"
-    | "unknown";
-  clinicContactMe: boolean;
+  chest_pain: boolean;
+  shortness_of_breath: "none" | "activity" | "rest";
+  precipitating_factor: "none" | "exertion" | "stress" | "missed_meds" | "unknown";
+  clinic_contact_me: boolean;
   status: Status;
   summary: string;
-  updatedAt: number;
+  created_at: string;
 };
 
 type DashboardMeta = Record<
@@ -35,29 +32,19 @@ type DashboardMeta = Record<
   }
 >;
 
-const PATIENTS_KEY = "patients";
-const DASHBOARD_META_KEY = "dashboard_meta";
+const ADMIN_SESSION_KEY = "atria_admin_auth";
 
-function loadPatients(): PatientRecord[] {
-  try {
-    const raw = localStorage.getItem(PATIENTS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+function saveDashboardMeta(meta: DashboardMeta) {
+  localStorage.setItem("dashboard_meta", JSON.stringify(meta));
 }
 
 function loadDashboardMeta(): DashboardMeta {
   try {
-    const raw = localStorage.getItem(DASHBOARD_META_KEY);
+    const raw = localStorage.getItem("dashboard_meta");
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
-}
-
-function saveDashboardMeta(meta: DashboardMeta) {
-  localStorage.setItem(DASHBOARD_META_KEY, JSON.stringify(meta));
 }
 
 function severityLabel(status: Status) {
@@ -91,32 +78,31 @@ function outreachLabel(status: OutreachStatus) {
   return "New";
 }
 
+function timeAgo(value: string) {
+  const ts = new Date(value).getTime();
+  const diff = Math.floor((Date.now() - ts) / 1000);
+
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 function buildAlertReason(patient: PatientRecord) {
   if (patient.status === "urgent") {
-    if (patient.chestPain) return "Chest pain reported";
-    if (patient.shortnessOfBreath === "rest") {
-      return "Shortness of breath at rest";
-    }
-    if (
-      patient.palpitations === "severe" &&
-      patient.duration === "over_30"
-    ) {
+    if (patient.chest_pain) return "Chest pain reported";
+    if (patient.shortness_of_breath === "rest") return "Shortness of breath at rest";
+    if (patient.palpitations === "severe" && patient.duration === "over_30") {
       return "Severe palpitations > 30 minutes";
     }
     return "High-risk symptoms";
   }
 
   if (patient.status === "attention") {
-    if (patient.clinicContactMe) return "Requested clinic contact";
-    if (patient.shortnessOfBreath === "activity") {
-      return "Shortness of breath with activity";
-    }
-    if (patient.palpitations === "moderate") {
-      return "Moderate palpitations";
-    }
-    if (patient.palpitations === "severe") {
-      return "Severe palpitations";
-    }
+    if (patient.clinic_contact_me) return "Requested clinic contact";
+    if (patient.shortness_of_breath === "activity") return "Shortness of breath with activity";
+    if (patient.palpitations === "moderate") return "Moderate palpitations";
+    if (patient.palpitations === "severe") return "Severe palpitations";
     if (patient.duration === "5_30") return "Symptoms 5–30 minutes";
     if (patient.duration === "over_30") return "Symptoms > 30 minutes";
     return "Needs follow-up";
@@ -150,26 +136,15 @@ function sortPatients(patients: PatientRecord[], meta: DashboardMeta) {
     };
 
     if (aMeta.outreachStatus !== bMeta.outreachStatus) {
-      return (
-        outreachRank[aMeta.outreachStatus] - outreachRank[bMeta.outreachStatus]
-      );
+      return outreachRank[aMeta.outreachStatus] - outreachRank[bMeta.outreachStatus];
     }
 
     if (a.status !== b.status) {
       return severityRank[a.status] - severityRank[b.status];
     }
 
-    return b.updatedAt - a.updatedAt;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
-}
-
-function timeAgo(timestamp: number) {
-  const diff = Math.floor((Date.now() - timestamp) / 1000);
-
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 function ActionButton({
@@ -198,224 +173,6 @@ function ActionButton({
     >
       {label}
     </button>
-  );
-}
-
-export default function DashboardPage() {
-  const [patients, setPatients] = useState<PatientRecord[]>([]);
-  const [meta, setMeta] = useState<DashboardMeta>({});
-
-  function refresh() {
-    setPatients(loadPatients());
-    setMeta(loadDashboardMeta());
-  }
-
-  useEffect(() => {
-    refresh();
-
-    const interval = setInterval(() => {
-      refresh();
-    }, 5000);
-
-    const handleFocus = () => refresh();
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
-
-  const sortedPatients = useMemo(
-    () => sortPatients(patients, meta),
-    [patients, meta]
-  );
-
-  const openAlerts = sortedPatients.filter(
-    (p) =>
-      (meta[p.id]?.outreachStatus || "new") !== "resolved" &&
-      p.status !== "stable"
-  );
-
-  const urgentAlerts = openAlerts.filter((p) => p.status === "urgent");
-  const attentionAlerts = openAlerts.filter((p) => p.status === "attention");
-
-  const attemptedAlerts = sortedPatients.filter(
-    (p) => meta[p.id]?.outreachStatus === "attempted"
-  );
-
-  const completedToday = sortedPatients.filter(
-    (p) => meta[p.id]?.outreachStatus === "resolved"
-  );
-
-  function updateMeta(id: string, patch: Partial<DashboardMeta[string]>) {
-    const next: DashboardMeta = {
-      ...meta,
-      [id]: {
-        outreachStatus: meta[id]?.outreachStatus || "new",
-        notes: meta[id]?.notes || "",
-        ...patch,
-      },
-    };
-
-    setMeta(next);
-    saveDashboardMeta(next);
-  }
-
-  return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#f8fafc",
-        padding: 24,
-        color: "#111827",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: 24,
-            borderBottom: "1px solid #e5e7eb",
-            paddingBottom: 14,
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 18 }}>AtriaCare</div>
-            <div style={{ color: "#64748b", fontSize: 13, marginTop: 2 }}>
-              Post-Ablation Alert Dashboard
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <a href="/" style={{ textDecoration: "none", color: "#111827" }}>
-              Check-In
-            </a>
-            <a
-              href="/dashboard"
-              style={{
-                textDecoration: "none",
-                color: "#111827",
-                fontWeight: 700,
-              }}
-            >
-              Dashboard
-            </a>
-            <button
-              type="button"
-              onClick={refresh}
-              style={{
-                padding: "10px 14px",
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-                background: "white",
-                color: "#111827",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 32, marginBottom: 8 }}>Alert Queue</h1>
-          <div style={{ color: "#64748b" }}>
-            Prioritize outreach, review symptoms, and document follow-up.
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 14,
-            marginBottom: 28,
-          }}
-        >
-          <SummaryCard
-            label="Urgent"
-            value={urgentAlerts.length}
-            valueColor="#dc2626"
-            background="#fef2f2"
-            border="#fecaca"
-          />
-          <SummaryCard
-            label="Needs Attention"
-            value={attentionAlerts.length}
-            valueColor="#d97706"
-            background="#fffbeb"
-            border="#fde68a"
-          />
-          <SummaryCard
-            label="Attempted"
-            value={attemptedAlerts.length}
-            valueColor="#2563eb"
-            background="#eff6ff"
-            border="#bfdbfe"
-          />
-          <SummaryCard
-            label="Resolved"
-            value={completedToday.length}
-            valueColor="#16a34a"
-            background="#f0fdf4"
-            border="#bbf7d0"
-          />
-        </div>
-
-        <SectionTitle
-          title="Active Alerts"
-          subtitle="Patients needing action now"
-        />
-
-        {openAlerts.length === 0 ? (
-          <EmptyState text="No active alerts right now." />
-        ) : (
-          <div style={{ display: "grid", gap: 16, marginBottom: 32 }}>
-            {openAlerts.map((patient) => (
-              <PatientCard
-                key={patient.id}
-                patient={patient}
-                outreachStatus={meta[patient.id]?.outreachStatus || "new"}
-                notes={meta[patient.id]?.notes || ""}
-                onUpdateMeta={updateMeta}
-              />
-            ))}
-          </div>
-        )}
-
-        <SectionTitle
-          title="Completed / Resolved"
-          subtitle="Handled alerts"
-        />
-
-        {completedToday.length === 0 ? (
-          <EmptyState text="No resolved alerts yet." />
-        ) : (
-          <div style={{ display: "grid", gap: 16 }}>
-            {completedToday.map((patient) => (
-              <PatientCard
-                key={patient.id}
-                patient={patient}
-                outreachStatus={meta[patient.id]?.outreachStatus || "new"}
-                notes={meta[patient.id]?.notes || ""}
-                onUpdateMeta={updateMeta}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </main>
   );
 }
 
@@ -480,6 +237,25 @@ function EmptyState({ text }: { text: string }) {
       }}
     >
       {text}
+    </div>
+  );
+}
+
+function PrototypeFooter() {
+  return (
+    <div
+      style={{
+        marginTop: 24,
+        paddingTop: 16,
+        borderTop: "1px solid #e5e7eb",
+        color: "#64748b",
+        fontSize: 12,
+        lineHeight: 1.5,
+      }}
+    >
+      Internal prototype for pilot evaluation only. Do not use as the sole
+      source of clinical decision-making. Do not enter patient names, MRNs,
+      dates of birth, or other direct identifiers.
     </div>
   );
 }
@@ -550,7 +326,7 @@ function PatientCard({
                 flexWrap: "wrap",
               }}
             >
-              {patient.studyCode}
+              {patient.study_code}
               {outreachStatus === "new" && (
                 <span
                   style={{
@@ -565,12 +341,32 @@ function PatientCard({
                   NEW
                 </span>
               )}
+              {patient.clinic_contact_me && (
+                <span
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    background: "#fde68a",
+                    color: "#92400e",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  CALLBACK
+                </span>
+              )}
             </div>
+
             <div style={{ color: "#64748b", marginTop: 4 }}>
-              Post-ablation • Week {patient.weeksSinceAblation}
+              Post-procedure • Week {patient.weeks_since_ablation}
             </div>
+
             <div style={{ color: "#64748b", marginTop: 4 }}>
-              Updated {timeAgo(patient.updatedAt)}
+              Procedure date: {patient.ablation_date}
+            </div>
+
+            <div style={{ color: "#64748b", marginTop: 4 }}>
+              Updated {timeAgo(patient.created_at)}
             </div>
           </div>
 
@@ -602,9 +398,26 @@ function PatientCard({
             Alert Reason
           </div>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>{reason}</div>
-          <div style={{ color: "#334155", lineHeight: 1.5 }}>
-            {patient.summary}
+
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              marginBottom: 8,
+              color:
+                patient.status === "urgent"
+                  ? "#dc2626"
+                  : patient.status === "attention"
+                  ? "#d97706"
+                  : "#16a34a",
+            }}
+          >
+            {patient.status === "urgent" && "→ Same-day follow-up recommended"}
+            {patient.status === "attention" && "→ Follow-up within 24 hours"}
+            {patient.status === "stable" && "→ No action needed"}
           </div>
+
+          <div style={{ color: "#334155", lineHeight: 1.5 }}>{patient.summary}</div>
         </div>
 
         <div style={{ marginBottom: 14 }}>
@@ -627,9 +440,7 @@ function PatientCard({
             <ActionButton
               label="Reached"
               active={outreachStatus === "called"}
-              onClick={() =>
-                onUpdateMeta(patient.id, { outreachStatus: "called" })
-              }
+              onClick={() => onUpdateMeta(patient.id, { outreachStatus: "called" })}
             />
             <ActionButton
               label="Resolved"
@@ -683,5 +494,311 @@ function PatientCard({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
+  const [meta, setMeta] = useState<DashboardMeta>({});
+
+  async function loadPatientsFromDB() {
+    const { data, error } = await supabase
+      .from("checkins")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      return [];
+    }
+
+    return (data || []) as PatientRecord[];
+  }
+
+  async function refresh() {
+    const data = await loadPatientsFromDB();
+    setPatients(data);
+    setMeta(loadDashboardMeta());
+  }
+
+  useEffect(() => {
+    const existing =
+      typeof window !== "undefined"
+        ? localStorage.getItem(ADMIN_SESSION_KEY)
+        : null;
+
+    if (existing !== "true") {
+      router.replace("/admin-login");
+      return;
+    }
+
+    setAuthorized(true);
+    refresh();
+
+    const interval = setInterval(() => {
+      refresh();
+    }, 5000);
+
+    const handleFocus = () => refresh();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [router]);
+
+  const sortedPatients = useMemo(
+    () => sortPatients(patients, meta),
+    [patients, meta]
+  );
+
+  const openAlerts = sortedPatients.filter(
+    (p) => (meta[p.id]?.outreachStatus || "new") !== "resolved" && p.status !== "stable"
+  );
+
+  const urgentAlerts = openAlerts.filter((p) => p.status === "urgent");
+  const attentionAlerts = openAlerts.filter((p) => p.status === "attention");
+
+  const attemptedAlerts = sortedPatients.filter(
+    (p) => meta[p.id]?.outreachStatus === "attempted"
+  );
+
+  const resolvedAlerts = sortedPatients.filter(
+    (p) => meta[p.id]?.outreachStatus === "resolved"
+  );
+
+  function updateMeta(id: string, patch: Partial<DashboardMeta[string]>) {
+    const next: DashboardMeta = {
+      ...meta,
+      [id]: {
+        outreachStatus: meta[id]?.outreachStatus || "new",
+        notes: meta[id]?.notes || "",
+        ...patch,
+      },
+    };
+
+    setMeta(next);
+    saveDashboardMeta(next);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    router.push("/admin-login");
+  }
+
+  if (!authorized) return null;
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#f8fafc",
+        padding: 24,
+        color: "#111827",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
+      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: 24,
+            borderBottom: "1px solid #e5e7eb",
+            paddingBottom: 14,
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 18 }}>AtriaCare</div>
+            <div style={{ color: "#64748b", fontSize: 13, marginTop: 2 }}>
+              Admin Dashboard
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <a href="/" style={{ textDecoration: "none", color: "#111827" }}>
+              Check-In
+            </a>
+            <a
+              href="/dashboard"
+              style={{
+                textDecoration: "none",
+                color: "#111827",
+                fontWeight: 700,
+              }}
+            >
+              Dashboard
+            </a>
+            <button
+              type="button"
+              onClick={refresh}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                background: "white",
+                color: "#111827",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                background: "white",
+                color: "#111827",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: 14,
+            borderRadius: 12,
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            color: "#92400e",
+            fontSize: 13,
+            lineHeight: 1.5,
+            marginBottom: 18,
+          }}
+        >
+          Internal prototype for pilot evaluation only. Do not use as the sole
+          source of clinical decision-making. Do not enter direct patient
+          identifiers.
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 32, marginBottom: 8 }}>Alert Queue</h1>
+          <div style={{ color: "#64748b" }}>
+            Prioritize outreach, review symptoms, and document follow-up.
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 14,
+            marginBottom: 28,
+          }}
+        >
+          <SummaryCard
+            label="Urgent"
+            value={urgentAlerts.length}
+            valueColor="#dc2626"
+            background="#fef2f2"
+            border="#fecaca"
+          />
+          <SummaryCard
+            label="Needs Attention"
+            value={attentionAlerts.length}
+            valueColor="#d97706"
+            background="#fffbeb"
+            border="#fde68a"
+          />
+          <SummaryCard
+            label="Attempted"
+            value={attemptedAlerts.length}
+            valueColor="#2563eb"
+            background="#eff6ff"
+            border="#bfdbfe"
+          />
+          <SummaryCard
+            label="Resolved"
+            value={resolvedAlerts.length}
+            valueColor="#16a34a"
+            background="#f0fdf4"
+            border="#bbf7d0"
+          />
+        </div>
+
+        <SectionTitle
+          title="Urgent Alerts"
+          subtitle="Same-day follow-up recommended"
+        />
+
+        {urgentAlerts.length === 0 ? (
+          <EmptyState text="No urgent alerts right now." />
+        ) : (
+          <div style={{ display: "grid", gap: 16, marginBottom: 32 }}>
+            {urgentAlerts.map((patient) => (
+              <PatientCard
+                key={patient.id}
+                patient={patient}
+                outreachStatus={meta[patient.id]?.outreachStatus || "new"}
+                notes={meta[patient.id]?.notes || ""}
+                onUpdateMeta={updateMeta}
+              />
+            ))}
+          </div>
+        )}
+
+        <SectionTitle
+          title="Needs Attention"
+          subtitle="Follow-up within 24 hours"
+        />
+
+        {attentionAlerts.length === 0 ? (
+          <EmptyState text="No attention alerts right now." />
+        ) : (
+          <div style={{ display: "grid", gap: 16, marginBottom: 32 }}>
+            {attentionAlerts.map((patient) => (
+              <PatientCard
+                key={patient.id}
+                patient={patient}
+                outreachStatus={meta[patient.id]?.outreachStatus || "new"}
+                notes={meta[patient.id]?.notes || ""}
+                onUpdateMeta={updateMeta}
+              />
+            ))}
+          </div>
+        )}
+
+        <SectionTitle
+          title="Resolved / Completed"
+          subtitle="Handled alerts"
+        />
+
+        {resolvedAlerts.length === 0 ? (
+          <EmptyState text="No resolved alerts yet." />
+        ) : (
+          <div style={{ display: "grid", gap: 16 }}>
+            {resolvedAlerts.map((patient) => (
+              <PatientCard
+                key={patient.id}
+                patient={patient}
+                outreachStatus={meta[patient.id]?.outreachStatus || "new"}
+                notes={meta[patient.id]?.notes || ""}
+                onUpdateMeta={updateMeta}
+              />
+            ))}
+          </div>
+        )}
+
+        <PrototypeFooter />
+      </div>
+    </main>
   );
 }
