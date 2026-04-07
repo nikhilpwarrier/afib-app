@@ -268,6 +268,7 @@ function TopNav() {
 export default function HomePage() {
   const [step, setStep] = useState<Step>("register");
   const [submitting, setSubmitting] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const [studyCode, setStudyCode] = useState("");
   const [ablationDate, setAblationDate] = useState("");
@@ -298,6 +299,13 @@ export default function HomePage() {
       setAblationDate(existing.ablationDate);
       setStep("start");
     }
+  }, []);
+
+  useEffect(() => {
+    const updateSize = () => setIsMobile(window.innerWidth < 900);
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
   }, []);
 
   const weeksSinceAblation = useMemo(
@@ -441,8 +449,8 @@ export default function HomePage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.1fr 0.9fr",
-            minHeight: "calc(100vh - 120px)",
+            gridTemplateColumns: isMobile ? "1fr" : "1.1fr 0.9fr",
+            minHeight: isMobile ? "auto" : "calc(100vh - 120px)",
             borderRadius: 20,
             overflow: "hidden",
             border: "1px solid #e5e7eb",
@@ -456,7 +464,7 @@ export default function HomePage() {
                 "linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 55%, #172554 100%)",
               color: "white",
               padding: 48,
-              display: "flex",
+              display: isMobile ? "none" : "flex",
               flexDirection: "column",
               justifyContent: "center",
             }}
@@ -504,7 +512,7 @@ export default function HomePage() {
 
           <div
             style={{
-              padding: 40,
+              padding: isMobile ? 24 : 40,
               display: "flex",
               flexDirection: "column",
               justifyContent: "center",
@@ -513,7 +521,7 @@ export default function HomePage() {
           >
             <div style={{ maxWidth: 420, width: "100%", margin: "0 auto" }}>
               <div style={{ marginBottom: 28 }}>
-                <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
+                <div style={{ fontSize: isMobile ? 24 : 28, fontWeight: 700, marginBottom: 8 }}>
                   Begin Check-In
                 </div>
                 <div style={{ color: "#64748b", fontSize: 15 }}>
@@ -744,7 +752,7 @@ export default function HomePage() {
                 style={{
                   display: "grid",
                   gap: 10,
-                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
                 }}
               >
                 <OptionButton
@@ -781,7 +789,7 @@ export default function HomePage() {
                 style={{
                   display: "grid",
                   gap: 10,
-                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
                 }}
               >
                 <OptionButton
@@ -848,7 +856,7 @@ export default function HomePage() {
                 style={{
                   display: "grid",
                   gap: 10,
-                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
                 }}
               >
                 <OptionButton
@@ -891,7 +899,7 @@ export default function HomePage() {
                 style={{
                   display: "grid",
                   gap: 10,
-                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)",
                 }}
               >
                 <OptionButton
@@ -944,7 +952,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
             <button
               onClick={() => setStep("start")}
               disabled={submitting}
@@ -1083,13 +1091,8 @@ export default function HomePage() {
                 fontWeight: 600,
               }}
             >
-              New Check-In  
+              New Check-In
             </button>
-
-            <a
-              href="/dashboard"
-            >
-            </a>
           </div>
         </div>
       )}
