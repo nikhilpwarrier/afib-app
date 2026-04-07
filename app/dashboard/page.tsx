@@ -625,20 +625,30 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <a href="/" style={{ textDecoration: "none", color: "#111827" }}>
-              Check-In
-            </a>
-            <a
-              href="/dashboard"
-              style={{
-                textDecoration: "none",
-                color: "#111827",
-                fontWeight: 700,
-              }}
-            >
-              Dashboard
-            </a>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+  <a href="/" style={{ textDecoration: "none", color: "#111827" }}>
+    Check-In
+  </a>
+  <a
+    href="/dashboard"
+    style={{
+      textDecoration: "none",
+      color: "#111827",
+      fontWeight: 700,
+    }}
+  >
+    Dashboard
+  </a>
+  <a
+    href="/history"
+    style={{
+      textDecoration: "none",
+      color: "#111827",
+      fontWeight: 700,
+    }}
+  >
+    History
+  </a>
             <button
               type="button"
               onClick={refresh}
@@ -776,26 +786,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <SectionTitle
-          title="Resolved / Completed"
-          subtitle="Handled alerts"
-        />
-
-        {resolvedAlerts.length === 0 ? (
-          <EmptyState text="No resolved alerts yet." />
-        ) : (
-          <div style={{ display: "grid", gap: 16 }}>
-            {resolvedAlerts.map((patient) => (
-              <PatientCard
-                key={patient.id}
-                patient={patient}
-                outreachStatus={meta[patient.id]?.outreachStatus || "new"}
-                notes={meta[patient.id]?.notes || ""}
-                onUpdateMeta={updateMeta}
-              />
-            ))}
-          </div>
-        )}
+        
 
         <PrototypeFooter />
       </div>
