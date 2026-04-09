@@ -479,7 +479,7 @@ export default function HomePage() {
               justifyContent: "center",
             }}
           >
-            <div style={{ fontSize: 3, fontWeight: 800, marginBottom: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>
               AtriaCare
             </div>
 

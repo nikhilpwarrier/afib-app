@@ -21,19 +21,16 @@ export default function Logo({
     ? "/logo-dark.svg"
     : "/logo.svg";
 
-  const width = iconOnly ? size : size;
-  const height = iconOnly ? size : Math.round(size * 0.26);
-
   return (
     <Image
       src={src}
       alt={alt}
-      width={width}
-      height={height}
+      width={size}
+      height={size} // safe fallback, overridden by style
       priority
       style={{
-        width: iconOnly ? `${size}px` : `${size}px`,
-        height: iconOnly ? `${size}px` : "auto",
+        width: size,
+        height: "auto", // preserves aspect ratio automatically
       }}
     />
   );
