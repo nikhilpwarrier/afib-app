@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Logo from "@/components/Logo";
 
 const ADMIN_SESSION_KEY = "atria_admin_auth";
 
@@ -78,12 +79,12 @@ export default function AdminLoginPage() {
             alignItems: "center",
           }}
         >
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 18 }}>AtriaCare</div>
-            <div style={{ color: "#64748b", fontSize: 13, marginTop: 2 }}>
-              Admin Access
-            </div>
-          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+  <Logo size={140} />
+  <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
+    Admin Access
+  </div>
+</div>
 
           <div style={{ display: "flex", gap: 16 }}>
             <a href="/" style={{ textDecoration: "none", color: "#111827" }}>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Logo from "@/components/Logo";
 import { supabase } from "@/lib/supabase";
 
 type Status = "urgent" | "attention" | "stable";
@@ -660,12 +661,12 @@ export default function DashboardPage() {
             alignItems: "center",
           }}
         >
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 18 }}>AtriaCare</div>
-            <div style={{ color: "#64748b", fontSize: 13, marginTop: 2 }}>
-              Admin Dashboard
-            </div>
-          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+  <Logo size={140} />
+  <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
+    Admin Dashboard
+  </div>
+</div>
 
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <a href="/" style={{ textDecoration: "none", color: "#111827" }}>

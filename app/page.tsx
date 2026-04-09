@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -234,7 +235,7 @@ function Shell({
         background: "#f8fafc",
         padding: 24,
         color: "#111827",
-        fontFamily: "Arial, sans-serif",
+        fontFamily: "Inter, system-ui, sans-serif"
       }}
     >
       <div style={{ maxWidth, margin: "0 auto" }}>{children}</div>
@@ -244,35 +245,29 @@ function Shell({
 
 function TopNav() {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 24,
-        borderBottom: "1px solid #e5e7eb",
-        paddingBottom: 14,
-        alignItems: "center",
-      }}
-    >
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 24,
+      borderBottom: "1px solid #e5e7eb",
+      paddingBottom: 12,
+      alignItems: "center",
+    }}>
       <div>
-        <div style={{ fontWeight: 800, fontSize: 18 }}>AtriaCare</div>
+        <Logo />
         <div style={{ color: "#64748b", fontSize: 13, marginTop: 2 }}>
-          Post-Ablation Recovery Monitoring
+          Post-Ablation Check-In
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 16 }}>
-        <a
-          href="/"
-          style={{ textDecoration: "none", color: "#111827", fontWeight: 700 }}
-        >
+        <a href="/" style={{ textDecoration: "none", color: "#111827", fontWeight: 700 }}>
           Check-In
         </a>
       </div>
     </div>
   );
 }
-
 export default function HomePage() {
   const [step, setStep] = useState<Step>("register");
   const [submitting, setSubmitting] = useState(false);
@@ -484,7 +479,7 @@ export default function HomePage() {
               justifyContent: "center",
             }}
           >
-            <div style={{ fontSize: 34, fontWeight: 800, marginBottom: 20 }}>
+            <div style={{ fontSize: 3, fontWeight: 800, marginBottom: 20 }}>
               AtriaCare
             </div>
 
@@ -543,7 +538,7 @@ export default function HomePage() {
                     marginBottom: 8,
                   }}
                 >
-                  Begin Check-In
+                  Start Check-In
                 </div>
                 <div style={{ color: "#64748b", fontSize: 15 }}>
                   Enter your study code and ablation date to continue.
@@ -705,29 +700,15 @@ export default function HomePage() {
               I have symptoms
             </button>
 
-            <button
-              onClick={() => setStep("register")}
-              disabled={submitting}
-              style={{
-                padding: "12px",
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-                background: "#f8fafc",
-                color: "#111827",
-                cursor: submitting ? "not-allowed" : "pointer",
-                opacity: submitting ? 0.6 : 1,
-              }}
-            >
-              Edit registration
-            </button>
+            
           </div>
 
           <div
             style={{
-              marginTop: 18,
+              marginTop: 12,
               fontSize: 13,
-              color: "#64748b",
-              lineHeight: 1.5,
+              color: "#b91c1c",
+              fontWeight: 500,
             }}
           >
             If you are experiencing severe symptoms such as chest pain, severe
@@ -751,7 +732,7 @@ export default function HomePage() {
         >
           <h1 style={{ fontSize: 30, marginBottom: 8 }}>Symptom Details</h1>
           <p style={{ color: "#64748b", marginBottom: 24 }}>
-            Tap the options that best match what you are having.
+            Select the options that best match how you feel.
           </p>
 
           <div
