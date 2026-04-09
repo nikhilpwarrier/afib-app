@@ -1,0 +1,39 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="heartGradDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#93C5FD"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    d="M100 46
+       C82 22, 47 29, 39 63
+       C32 91, 53 122, 90 147
+       C95 150, 105 150, 110 147
+       C147 122, 168 91, 161 63
+       C153 29, 120 22, 102 46
+       C101 48, 99 48, 100 46Z"
+    fill="url(#heartGradDark)"
+  />
+
+  <path
+    d="M90 59
+       C77 44, 57 52, 50 72
+       C47 86, 64 108, 90 126
+       C95 129, 100 129, 105 126
+       C131 108, 147 86, 141 72
+       C134 52, 111 44, 92 59Z"
+    fill="#1D4ED8"
+    opacity="0.16"
+  />
+
+  <polyline
+    points="58,86 76,86 83,74 95,102 109,80 132,80"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

@@ -1,0 +1,47 @@
+<svg width="760" height="200" viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="heartGradDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#93C5FD"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    d="M120 65
+       C102 38, 62 45, 55 80
+       C48 110, 72 140, 110 165
+       C115 168, 125 168, 130 165
+       C168 140, 192 110, 185 80
+       C178 45, 140 38, 122 65
+       C121 67, 119 67, 120 65Z"
+    fill="url(#heartGradDark)"
+  />
+
+  <path
+    d="M110 78
+       C95 60, 70 70, 65 90
+       C62 105, 82 125, 110 145
+       C115 148, 120 148, 125 145
+       C153 125, 170 105, 165 90
+       C158 70, 130 60, 112 78Z"
+    fill="#1D4ED8"
+    opacity="0.18"
+  />
+
+  <polyline
+    points="75,105 95,105 102,90 115,120 130,95 155,95"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <text x="210" y="125"
+    font-family="Inter, -apple-system, BlinkMacSystemFont, system-ui, Arial, sans-serif"
+    font-size="80"
+    letter-spacing="-1.5"
+    fill="#FFFFFF">
+    <tspan font-weight="700">Atria</tspan><tspan font-weight="400">Care</tspan>
+  </text>
+</svg>
