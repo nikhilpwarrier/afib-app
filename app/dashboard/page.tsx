@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -17,35 +17,22 @@ type PatientRecord = {
   duration: "under_5" | "5_30" | "over_30" | "none";
   chest_pain: boolean;
   shortness_of_breath: "none" | "activity" | "rest";
-  precipitating_factor: "none" | "exertion" | "stress" | "missed_meds" | "unknown";
+  precipitating_factor:
+    | "none"
+    | "exertion"
+    | "stress"
+    | "missed_meds"
+    | "unknown";
   clinic_contact_me: boolean;
+  would_have_gone_to_ed: boolean;
+  outreach_status: OutreachStatus | null;
+  outreach_notes: string | null;
   status: Status;
   summary: string;
   created_at: string;
 };
 
-type DashboardMeta = Record<
-  string,
-  {
-    outreachStatus: OutreachStatus;
-    notes: string;
-  }
->;
-
 const ADMIN_SESSION_KEY = "atria_admin_auth";
-
-function saveDashboardMeta(meta: DashboardMeta) {
-  localStorage.setItem("dashboard_meta", JSON.stringify(meta));
-}
-
-function loadDashboardMeta(): DashboardMeta {
-  try {
-    const raw = localStorage.getItem("dashboard_meta");
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
 
 function severityLabel(status: Status) {
   if (status === "urgent") return "Urgent";
@@ -100,6 +87,7 @@ function buildAlertReason(patient: PatientRecord) {
 
   if (patient.status === "attention") {
     if (patient.clinic_contact_me) return "Requested clinic contact";
+    if (patient.would_have_gone_to_ed) return "Would have gone to ER without app";
     if (patient.shortness_of_breath === "activity") return "Shortness of breath with activity";
     if (patient.palpitations === "moderate") return "Moderate palpitations";
     if (patient.palpitations === "severe") return "Severe palpitations";
@@ -111,7 +99,7 @@ function buildAlertReason(patient: PatientRecord) {
   return "No urgent concerns";
 }
 
-function sortPatients(patients: PatientRecord[], meta: DashboardMeta) {
+function sortPatients(patients: PatientRecord[]) {
   const severityRank: Record<Status, number> = {
     urgent: 0,
     attention: 1,
@@ -126,17 +114,11 @@ function sortPatients(patients: PatientRecord[], meta: DashboardMeta) {
   };
 
   return [...patients].sort((a, b) => {
-    const aMeta = meta[a.id] || {
-      outreachStatus: "new" as OutreachStatus,
-      notes: "",
-    };
-    const bMeta = meta[b.id] || {
-      outreachStatus: "new" as OutreachStatus,
-      notes: "",
-    };
+    const aOutreach = a.outreach_status || "new";
+    const bOutreach = b.outreach_status || "new";
 
-    if (aMeta.outreachStatus !== bMeta.outreachStatus) {
-      return outreachRank[aMeta.outreachStatus] - outreachRank[bMeta.outreachStatus];
+    if (aOutreach !== bOutreach) {
+      return outreachRank[aOutreach] - outreachRank[bOutreach];
     }
 
     if (a.status !== b.status) {
@@ -260,27 +242,80 @@ function PrototypeFooter() {
   );
 }
 
+function StableRow({ patient }: { patient: PatientRecord }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1.2fr 0.8fr 1.4fr 1fr",
+        gap: 12,
+        padding: "12px 14px",
+        borderBottom: "1px solid #e5e7eb",
+        alignItems: "center",
+        fontSize: 14,
+      }}
+    >
+      <div style={{ fontWeight: 700 }}>{patient.study_code}</div>
+      <div style={{ color: "#64748b" }}>Week {patient.weeks_since_ablation}</div>
+      <div style={{ color: "#64748b" }}>
+        {new Date(patient.created_at).toLocaleString()}
+      </div>
+      <div style={{ color: "#16a34a", fontWeight: 700 }}>Stable</div>
+    </div>
+  );
+}
+
 function PatientCard({
   patient,
-  outreachStatus,
-  notes,
-  onUpdateMeta,
+  onRefresh,
 }: {
   patient: PatientRecord;
-  outreachStatus: OutreachStatus;
-  notes: string;
-  onUpdateMeta: (
-    id: string,
-    patch: { outreachStatus?: OutreachStatus; notes?: string }
-  ) => void;
+  onRefresh: () => void;
 }) {
-  const [localNotes, setLocalNotes] = useState(notes);
-
-  useEffect(() => {
-    setLocalNotes(notes);
-  }, [notes]);
+  const [localNotes, setLocalNotes] = useState(() => patient.outreach_notes || "");
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
 
   const reason = buildAlertReason(patient);
+  const outreachStatus = patient.outreach_status || "new";
+
+  async function updateOutreachStatus(nextStatus: OutreachStatus) {
+    setSavingStatus(true);
+
+    const { error } = await supabase
+      .from("checkins")
+      .update({ outreach_status: nextStatus })
+      .eq("id", patient.id);
+
+    setSavingStatus(false);
+
+    if (error) {
+      console.error(error);
+      alert("Error saving outreach status");
+      return;
+    }
+
+    onRefresh();
+  }
+
+  async function saveNotes() {
+    setSavingNotes(true);
+
+    const { error } = await supabase
+      .from("checkins")
+      .update({ outreach_notes: localNotes })
+      .eq("id", patient.id);
+
+    setSavingNotes(false);
+
+    if (error) {
+      console.error(error);
+      alert("Error saving note");
+      return;
+    }
+
+    onRefresh();
+  }
 
   return (
     <div
@@ -327,6 +362,7 @@ function PatientCard({
               }}
             >
               {patient.study_code}
+
               {outreachStatus === "new" && (
                 <span
                   style={{
@@ -341,6 +377,7 @@ function PatientCard({
                   NEW
                 </span>
               )}
+
               {patient.clinic_contact_me && (
                 <span
                   style={{
@@ -353,6 +390,21 @@ function PatientCard({
                   }}
                 >
                   CALLBACK
+                </span>
+              )}
+
+              {patient.would_have_gone_to_ed && (
+                <span
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    background: "#dbeafe",
+                    color: "#1d4ed8",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  ER AVOIDED
                 </span>
               )}
             </div>
@@ -428,28 +480,30 @@ function PatientCard({
             <ActionButton
               label="New"
               active={outreachStatus === "new"}
-              onClick={() => onUpdateMeta(patient.id, { outreachStatus: "new" })}
+              onClick={() => updateOutreachStatus("new")}
             />
             <ActionButton
               label="Attempted"
               active={outreachStatus === "attempted"}
-              onClick={() =>
-                onUpdateMeta(patient.id, { outreachStatus: "attempted" })
-              }
+              onClick={() => updateOutreachStatus("attempted")}
             />
             <ActionButton
               label="Reached"
               active={outreachStatus === "called"}
-              onClick={() => onUpdateMeta(patient.id, { outreachStatus: "called" })}
+              onClick={() => updateOutreachStatus("called")}
             />
             <ActionButton
               label="Resolved"
               active={outreachStatus === "resolved"}
-              onClick={() =>
-                onUpdateMeta(patient.id, { outreachStatus: "resolved" })
-              }
+              onClick={() => updateOutreachStatus("resolved")}
             />
           </div>
+
+          {savingStatus && (
+            <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
+              Saving status...
+            </div>
+          )}
         </div>
 
         <div>
@@ -468,12 +522,13 @@ function PatientCard({
               border: "1px solid #d4d4d4",
               resize: "vertical",
               fontFamily: "Arial, sans-serif",
+              boxSizing: "border-box",
             }}
           />
           <div style={{ marginTop: 10 }}>
             <button
               type="button"
-              onClick={() => onUpdateMeta(patient.id, { notes: localNotes })}
+              onClick={saveNotes}
               style={{
                 padding: "10px 14px",
                 borderRadius: 10,
@@ -484,7 +539,7 @@ function PatientCard({
                 fontWeight: 600,
               }}
             >
-              Save Note
+              {savingNotes ? "Saving..." : "Save Note"}
             </button>
           </div>
         </div>
@@ -501,9 +556,9 @@ export default function DashboardPage() {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
   const [patients, setPatients] = useState<PatientRecord[]>([]);
-  const [meta, setMeta] = useState<DashboardMeta>({});
+  const [showStable, setShowStable] = useState(false);
 
-  async function loadPatientsFromDB() {
+  const loadPatientsFromDB = useCallback(async () => {
     const { data, error } = await supabase
       .from("checkins")
       .select("*")
@@ -515,13 +570,12 @@ export default function DashboardPage() {
     }
 
     return (data || []) as PatientRecord[];
-  }
+  }, []);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const data = await loadPatientsFromDB();
     setPatients(data);
-    setMeta(loadDashboardMeta());
-  }
+  }, [loadPatientsFromDB]);
 
   useEffect(() => {
     const existing =
@@ -554,41 +608,29 @@ export default function DashboardPage() {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [router]);
+  }, [router, refresh]);
 
-  const sortedPatients = useMemo(
-    () => sortPatients(patients, meta),
-    [patients, meta]
-  );
+  const sortedPatients = useMemo(() => sortPatients(patients), [patients]);
 
   const openAlerts = sortedPatients.filter(
-    (p) => (meta[p.id]?.outreachStatus || "new") !== "resolved" && p.status !== "stable"
+    (p) => (p.outreach_status || "new") !== "resolved" && p.status !== "stable"
   );
 
   const urgentAlerts = openAlerts.filter((p) => p.status === "urgent");
   const attentionAlerts = openAlerts.filter((p) => p.status === "attention");
 
   const attemptedAlerts = sortedPatients.filter(
-    (p) => meta[p.id]?.outreachStatus === "attempted"
+    (p) => (p.outreach_status || "new") === "attempted"
   );
 
   const resolvedAlerts = sortedPatients.filter(
-    (p) => meta[p.id]?.outreachStatus === "resolved"
+    (p) => (p.outreach_status || "new") === "resolved"
   );
 
-  function updateMeta(id: string, patch: Partial<DashboardMeta[string]>) {
-    const next: DashboardMeta = {
-      ...meta,
-      [id]: {
-        outreachStatus: meta[id]?.outreachStatus || "new",
-        notes: meta[id]?.notes || "",
-        ...patch,
-      },
-    };
-
-    setMeta(next);
-    saveDashboardMeta(next);
-  }
+  const stablePatients = sortedPatients.filter((p) => p.status === "stable");
+  const erAvoidanceCount = sortedPatients.filter(
+    (p) => p.would_have_gone_to_ed
+  ).length;
 
   function handleLogout() {
     localStorage.removeItem(ADMIN_SESSION_KEY);
@@ -625,30 +667,30 @@ export default function DashboardPage() {
             </div>
           </div>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-  <a href="/" style={{ textDecoration: "none", color: "#111827" }}>
-    Check-In
-  </a>
-  <a
-    href="/dashboard"
-    style={{
-      textDecoration: "none",
-      color: "#111827",
-      fontWeight: 700,
-    }}
-  >
-    Dashboard
-  </a>
-  <a
-    href="/history"
-    style={{
-      textDecoration: "none",
-      color: "#111827",
-      fontWeight: 700,
-    }}
-  >
-    History
-  </a>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <a href="/" style={{ textDecoration: "none", color: "#111827" }}>
+              Check-In
+            </a>
+            <a
+              href="/dashboard"
+              style={{
+                textDecoration: "none",
+                color: "#111827",
+                fontWeight: 700,
+              }}
+            >
+              Dashboard
+            </a>
+            <a
+              href="/history"
+              style={{
+                textDecoration: "none",
+                color: "#111827",
+                fontWeight: 700,
+              }}
+            >
+              History
+            </a>
             <button
               type="button"
               onClick={refresh}
@@ -709,7 +751,7 @@ export default function DashboardPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
             gap: 14,
             marginBottom: 28,
           }}
@@ -742,6 +784,13 @@ export default function DashboardPage() {
             background="#f0fdf4"
             border="#bbf7d0"
           />
+          <SummaryCard
+            label="ER Avoided"
+            value={erAvoidanceCount}
+            valueColor="#1d4ed8"
+            background="#eff6ff"
+            border="#bfdbfe"
+          />
         </div>
 
         <SectionTitle
@@ -757,9 +806,7 @@ export default function DashboardPage() {
               <PatientCard
                 key={patient.id}
                 patient={patient}
-                outreachStatus={meta[patient.id]?.outreachStatus || "new"}
-                notes={meta[patient.id]?.notes || ""}
-                onUpdateMeta={updateMeta}
+                onRefresh={refresh}
               />
             ))}
           </div>
@@ -778,15 +825,81 @@ export default function DashboardPage() {
               <PatientCard
                 key={patient.id}
                 patient={patient}
-                outreachStatus={meta[patient.id]?.outreachStatus || "new"}
-                notes={meta[patient.id]?.notes || ""}
-                onUpdateMeta={updateMeta}
+                onRefresh={refresh}
               />
             ))}
           </div>
         )}
 
-        
+        <SectionTitle
+          title="Stable Check-Ins"
+          subtitle="Confirms patient engagement even when no follow-up is needed"
+        />
+
+        <div
+          style={{
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            background: "white",
+            marginBottom: 30,
+            overflow: "hidden",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setShowStable((prev) => !prev)}
+            style={{
+              width: "100%",
+              textAlign: "left",
+              padding: "14px 16px",
+              border: "none",
+              background: "#f8fafc",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: 15,
+              color: "#111827",
+            }}
+          >
+            {showStable ? "Hide" : "Show"} Stable Check-Ins ({stablePatients.length})
+          </button>
+
+          {showStable && (
+            <>
+              {stablePatients.length === 0 ? (
+                <div style={{ padding: 16, color: "#64748b" }}>
+                  No stable check-ins yet.
+                </div>
+              ) : (
+                <div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1.2fr 0.8fr 1.4fr 1fr",
+                      gap: 12,
+                      padding: "12px 14px",
+                      borderBottom: "1px solid #e5e7eb",
+                      background: "#fafafa",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#64748b",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    <div>Study Code</div>
+                    <div>Week</div>
+                    <div>Timestamp</div>
+                    <div>Status</div>
+                  </div>
+
+                  {stablePatients.map((patient) => (
+                    <StableRow key={patient.id} patient={patient} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
         <PrototypeFooter />
       </div>

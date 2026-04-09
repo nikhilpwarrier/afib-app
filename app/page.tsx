@@ -28,6 +28,7 @@ type SavedRecord = {
     | "missed_meds"
     | "unknown";
   clinicContactMe: boolean;
+  wouldHaveGoneToED: boolean;
   status: Status;
   summary: string;
   created_at?: string;
@@ -66,6 +67,7 @@ function getStatus(input: {
   chestPain: boolean;
   shortnessOfBreath: "none" | "activity" | "rest";
   clinicContactMe: boolean;
+  wouldHaveGoneToED: boolean;
 }): Status {
   if (input.noSymptoms) return "stable";
 
@@ -83,7 +85,8 @@ function getStatus(input: {
     input.duration === "5_30" ||
     input.duration === "over_30" ||
     input.shortnessOfBreath === "activity" ||
-    input.clinicContactMe
+    input.clinicContactMe ||
+    input.wouldHaveGoneToED
   ) {
     return "attention";
   }
@@ -104,6 +107,7 @@ function buildSummary(input: {
     | "missed_meds"
     | "unknown";
   clinicContactMe: boolean;
+  wouldHaveGoneToED: boolean;
 }): string {
   if (input.noSymptoms) return "No symptoms reported today.";
 
@@ -155,6 +159,10 @@ function buildSummary(input: {
 
   if (input.clinicContactMe) {
     parts.push("Requested clinic contact");
+  }
+
+  if (input.wouldHaveGoneToED) {
+    parts.push("Would have gone to the ER without this check-in");
   }
 
   return parts.length > 0 ? parts.join(". ") + "." : "Symptoms reported.";
@@ -289,6 +297,7 @@ export default function HomePage() {
     "none" | "exertion" | "stress" | "missed_meds" | "unknown"
   >("none");
   const [clinicContactMe, setClinicContactMe] = useState(false);
+  const [wouldHaveGoneToED, setWouldHaveGoneToED] = useState(false);
 
   const [savedRecord, setSavedRecord] = useState<SavedRecord | null>(null);
 
@@ -337,6 +346,7 @@ export default function HomePage() {
       shortness_of_breath: record.shortnessOfBreath,
       precipitating_factor: record.precipitatingFactor,
       clinic_contact_me: record.clinicContactMe,
+      would_have_gone_to_ed: record.wouldHaveGoneToED,
       status: record.status,
       summary: record.summary,
     };
@@ -377,6 +387,7 @@ export default function HomePage() {
       shortnessOfBreath: "none",
       precipitatingFactor: "none",
       clinicContactMe: false,
+      wouldHaveGoneToED: false,
       status: "stable",
       summary: "No symptoms reported today.",
     };
@@ -395,6 +406,7 @@ export default function HomePage() {
       chestPain,
       shortnessOfBreath,
       clinicContactMe,
+      wouldHaveGoneToED,
     });
 
     const summary = buildSummary({
@@ -405,6 +417,7 @@ export default function HomePage() {
       shortnessOfBreath,
       precipitatingFactor,
       clinicContactMe,
+      wouldHaveGoneToED,
     });
 
     const record: SavedRecord = {
@@ -418,6 +431,7 @@ export default function HomePage() {
       shortnessOfBreath,
       precipitatingFactor,
       clinicContactMe,
+      wouldHaveGoneToED,
       status,
       summary,
     };
@@ -433,6 +447,7 @@ export default function HomePage() {
     setShortnessOfBreath("none");
     setPrecipitatingFactor("none");
     setClinicContactMe(false);
+    setWouldHaveGoneToED(false);
   }
 
   function startNewCheckIn() {
@@ -521,7 +536,13 @@ export default function HomePage() {
           >
             <div style={{ maxWidth: 420, width: "100%", margin: "0 auto" }}>
               <div style={{ marginBottom: 28 }}>
-                <div style={{ fontSize: isMobile ? 24 : 28, fontWeight: 700, marginBottom: 8 }}>
+                <div
+                  style={{
+                    fontSize: isMobile ? 24 : 28,
+                    fontWeight: 700,
+                    marginBottom: 8,
+                  }}
+                >
                   Begin Check-In
                 </div>
                 <div style={{ color: "#64748b", fontSize: 15 }}>
@@ -930,7 +951,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div>
+            <div style={{ display: "grid", gap: 10 }}>
               <label
                 style={{
                   display: "flex",
@@ -949,10 +970,37 @@ export default function HomePage() {
                 />
                 <span>Have clinic contact me</span>
               </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: 14,
+                  border: wouldHaveGoneToED
+                    ? "1px solid #fde68a"
+                    : "1px solid #d1d5db",
+                  borderRadius: 12,
+                  background: wouldHaveGoneToED ? "#fffbeb" : "white",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={wouldHaveGoneToED}
+                  onChange={(e) => setWouldHaveGoneToED(e.target.checked)}
+                />
+                <span>Without this app, I would have gone to the ER</span>
+              </label>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              flexDirection: isMobile ? "column" : "row",
+            }}
+          >
             <button
               onClick={() => setStep("start")}
               disabled={submitting}
@@ -1004,7 +1052,7 @@ export default function HomePage() {
         >
           <h1 style={{ fontSize: 30, marginBottom: 8 }}>
             {savedRecord.status === "urgent" && "We Recommend Follow-Up"}
-            {savedRecord.status === "attention" && "We’ll Review Your Symptoms"}
+            {savedRecord.status === "attention" && "We'll Review Your Symptoms"}
             {savedRecord.status === "stable" && "Everything Looks Good Today"}
           </h1>
 
@@ -1045,6 +1093,24 @@ export default function HomePage() {
           >
             {savedRecord.summary}
           </div>
+
+          {savedRecord.wouldHaveGoneToED && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                borderRadius: 12,
+                background: "#eff6ff",
+                border: "1px solid #bfdbfe",
+                color: "#1d4ed8",
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              Thanks — you indicated this check-in may have helped avoid an ER
+              visit today.
+            </div>
+          )}
 
           {savedRecord.status === "urgent" && (
             <div
