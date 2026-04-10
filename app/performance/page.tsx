@@ -112,16 +112,7 @@ function Table({
 }) {
   return (
     <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden", background: "white", marginBottom: 8 }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${headers.length}, 1fr)`,
-          background: "#f8fafc",
-          borderBottom: "1px solid #e5e7eb",
-          padding: "10px 14px",
-          gap: 8,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${headers.length}, 1fr)`, background: "#f8fafc", borderBottom: "1px solid #e5e7eb", padding: "10px 14px", gap: 8 }}>
         {headers.map((h, i) => (
           <div key={i} style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.4 }}>{h}</div>
         ))}
@@ -132,14 +123,7 @@ function Table({
         rows.map((row, ri) => (
           <div
             key={ri}
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${headers.length}, 1fr)`,
-              padding: "11px 14px",
-              gap: 8,
-              borderBottom: ri < rows.length - 1 ? "1px solid #f1f5f9" : "none",
-              alignItems: "center",
-            }}
+            style={{ display: "grid", gridTemplateColumns: `repeat(${headers.length}, 1fr)`, padding: "11px 14px", gap: 8, borderBottom: ri < rows.length - 1 ? "1px solid #f1f5f9" : "none", alignItems: "center" }}
           >
             {row.map((cell, ci) => (
               <div key={ci} style={{ fontSize: 13, color: ci === 0 ? "#111827" : "#64748b", fontWeight: ci === 0 ? 700 : 400 }}>
@@ -255,7 +239,7 @@ export default function PerformancePage() {
     r.outreach_status === "called" || r.outreach_status === "resolved"
   ).length;
 
-  // Response time metrics using new timestamp columns
+  // Response time metrics
   const yellowResponseTimes = yellowFlagged
     .filter((r) => r.first_outreach_at)
     .map((r) => minutesBetween(r.created_at, r.first_outreach_at!));
@@ -265,10 +249,20 @@ export default function PerformancePage() {
   const resolutionTimes = flaggedRecords
     .filter((r) => r.resolved_at)
     .map((r) => minutesBetween(r.created_at, r.resolved_at!));
+  const allResponseTimes = flaggedRecords
+    .filter((r) => r.first_outreach_at)
+    .map((r) => minutesBetween(r.created_at, r.first_outreach_at!));
 
   const medianYellowResponse = median(yellowResponseTimes);
   const medianRedResponse = median(redResponseTimes);
   const medianResolutionTime = median(resolutionTimes);
+  const medianOverallResponse = median(allResponseTimes);
+
+  // Red contacted within 60 min
+  const redContactedFast = redFlagged.filter((r) => {
+    if (!r.first_outreach_at) return false;
+    return minutesBetween(r.created_at, r.first_outreach_at) <= 60;
+  }).length;
 
   // Weekly distribution
   const weekBuckets: Record<number, { total: number; yellow: number; red: number }> = {};
@@ -390,14 +384,28 @@ export default function PerformancePage() {
           <div style={{ color: "#64748b", fontSize: 14, padding: 24 }}>Loading...</div>
         ) : (
           <>
-            {/* ── Top summary ── */}
+            {/* ── TOP SUMMARY — outcome-first ── */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 12, marginBottom: 8 }}>
               <SummaryCard label="Patients with Check-Ins" value={totalPatients} sub={`${medianCheckins} median check-ins`} />
               <SummaryCard label="Total Check-Ins" value={totalCheckins} sub={`${noSymptomCheckins} no symptoms`} />
-              <SummaryCard label="Yellow Flags" value={yellowFlags} sub={pct(yellowFlags, totalCheckins) + " of check-ins"} valueColor="#d97706" background="#fffbeb" border="#fde68a" />
-              <SummaryCard label="Red Flags" value={redFlags} sub={pct(redFlags, totalCheckins) + " of check-ins"} valueColor="#dc2626" background="#fef2f2" border="#fecaca" />
-              <SummaryCard label="ER Avoided" value={erAvoidanceTotal} sub={`${erAvoidancePatients} patients`} valueColor="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
-              <SummaryCard label="Unresolved Alerts" value={unresolved} sub={`${resolved} resolved`} valueColor={unresolved > 0 ? "#d97706" : "#16a34a"} background={unresolved > 0 ? "#fffbeb" : "#f0fdf4"} border={unresolved > 0 ? "#fde68a" : "#bbf7d0"} />
+              <SummaryCard label="ER Avoided" value={erAvoidanceTotal} sub={`${erAvoidancePatients} patients · ${pct(erAvoidanceTotal, symptomCheckins)} of symptomatic`} valueColor="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
+              <SummaryCard label="Flags Contacted" value={`${contacted} / ${totalFlags}`} sub={pct(contacted, totalFlags) + " contact rate"} valueColor={contacted === totalFlags && totalFlags > 0 ? "#16a34a" : "#d97706"} background={contacted === totalFlags && totalFlags > 0 ? "#f0fdf4" : "#fffbeb"} border={contacted === totalFlags && totalFlags > 0 ? "#bbf7d0" : "#fde68a"} />
+              <SummaryCard
+                label="Median Response Time"
+                value={allResponseTimes.length > 0 ? formatMinutes(medianOverallResponse) : "--"}
+                sub="submission to first outreach"
+                valueColor="#1d4ed8"
+                background="#eff6ff"
+                border="#bfdbfe"
+              />
+              <SummaryCard
+                label="Median Time to Close"
+                value={resolutionTimes.length > 0 ? formatMinutes(medianResolutionTime) : "--"}
+                sub="submission to resolved"
+                valueColor="#16a34a"
+                background="#f0fdf4"
+                border="#bbf7d0"
+              />
             </div>
 
             {/* ── Utilization ── */}
@@ -406,48 +414,73 @@ export default function PerformancePage() {
               <SummaryCard label="Median Check-Ins / Patient" value={medianCheckins} />
               <SummaryCard label="Symptom Check-Ins" value={symptomCheckins} sub={pct(symptomCheckins, totalCheckins) + " of total"} />
               <SummaryCard label="Callback Requests" value={callbackRequests} sub={pct(callbackRequests, totalCheckins) + " of check-ins"} />
-              <SummaryCard label="Flags Contacted" value={contacted} sub={pct(contacted, totalFlags) + " of all flags"} />
+              <SummaryCard label="Total Flags" value={totalFlags} sub={`${yellowFlags} yellow · ${redFlags} red`} />
             </div>
 
             {/* ── Clinical signal ── */}
             <SectionHeader title="Clinical Signal" subtitle="What is the pathway detecting?" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 8 }}>
-              <SummaryCard label="Total Flags" value={totalFlags} sub={`${yellowFlags} yellow · ${redFlags} red`} />
-              <SummaryCard label="Flag Rate" value={pct(totalFlags, totalCheckins)} sub="of all check-ins" />
-              <SummaryCard label="ER Avoidance Rate" value={pct(erAvoidanceTotal, symptomCheckins)} sub="of symptom check-ins" valueColor="#1d4ed8" />
+              <SummaryCard label="Yellow Flags" value={yellowFlags} sub={pct(yellowFlags, totalCheckins) + " of check-ins"} valueColor="#d97706" background="#fffbeb" border="#fde68a" />
+              <SummaryCard label="Red Flags" value={redFlags} sub={pct(redFlags, totalCheckins) + " of check-ins"} valueColor="#dc2626" background="#fef2f2" border="#fecaca" />
+              <SummaryCard label="ER Avoidance Rate" value={pct(erAvoidanceTotal, symptomCheckins)} sub="of symptom check-ins" valueColor="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
               <SummaryCard label="Patients with ER Flag" value={erAvoidancePatients} sub={pct(erAvoidancePatients, totalPatients) + " of enrolled"} valueColor="#1d4ed8" />
             </div>
 
             {/* ── Outreach performance ── */}
-            <SectionHeader title="Outreach Performance" subtitle="Are flagged patients being followed up?" />
+            <SectionHeader title="Outreach Performance" subtitle="Are flagged patients being followed up, and how fast?" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 8 }}>
-              <SummaryCard label="Yellow Contacted" value={`${yellowContacted} / ${yellowFlags}`} sub={pct(yellowContacted, yellowFlags) + " contact rate"} valueColor="#d97706" />
-              <SummaryCard label="Red Contacted" value={`${redContacted} / ${redFlags}`} sub={pct(redContacted, redFlags) + " contact rate"} valueColor="#dc2626" />
+              {/* Color-tinted contact cards */}
+              <SummaryCard
+                label="Yellow Contacted"
+                value={`${yellowContacted} / ${yellowFlags}`}
+                sub={pct(yellowContacted, yellowFlags) + " contact rate"}
+                valueColor="#d97706"
+                background="#fffbeb"
+                border="#fde68a"
+              />
+              <SummaryCard
+                label="Red Contacted"
+                value={`${redContacted} / ${redFlags}`}
+                sub={pct(redContacted, redFlags) + " contact rate"}
+                valueColor="#dc2626"
+                background="#fef2f2"
+                border="#fecaca"
+              />
               <SummaryCard
                 label="Median Yellow Response"
                 value={yellowResponseTimes.length > 0 ? formatMinutes(medianYellowResponse) : "--"}
                 sub="submission to first outreach"
                 valueColor="#d97706"
+                background="#fffbeb"
+                border="#fde68a"
               />
               <SummaryCard
                 label="Median Red Response"
                 value={redResponseTimes.length > 0 ? formatMinutes(medianRedResponse) : "--"}
                 sub="submission to first outreach"
                 valueColor="#dc2626"
+                background="#fef2f2"
+                border="#fecaca"
               />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 8 }}>
-              <SummaryCard label="Alerts Resolved" value={resolved} sub={pct(resolved, totalFlags) + " of all flags"} valueColor="#16a34a" />
+              <SummaryCard label="Alerts Resolved" value={resolved} sub={pct(resolved, totalFlags) + " closure rate"} valueColor="#16a34a" background="#f0fdf4" border="#bbf7d0" />
+              <SummaryCard label="Unresolved Alerts" value={unresolved} sub="require follow-up" valueColor={unresolved > 0 ? "#d97706" : "#16a34a"} background={unresolved > 0 ? "#fffbeb" : "#f0fdf4"} border={unresolved > 0 ? "#fde68a" : "#bbf7d0"} />
               <SummaryCard
-                label="Median Time to Resolution"
+                label="Red Alerts Within 60 min"
+                value={redFlags > 0 ? `${redContactedFast} / ${redFlags}` : "--"}
+                sub={pct(redContactedFast, redFlags) + " within 1 hour"}
+                valueColor="#dc2626"
+              />
+              <SummaryCard
+                label="Median Time to Close"
                 value={resolutionTimes.length > 0 ? formatMinutes(medianResolutionTime) : "--"}
                 sub="submission to resolved"
+                valueColor="#16a34a"
               />
-              <SummaryCard label="Unresolved Alerts" value={unresolved} sub="require follow-up" valueColor={unresolved > 0 ? "#d97706" : "#16a34a"} />
-              <SummaryCard label="Resolved Alerts" value={resolved} sub={pct(resolved, totalFlags) + " closure rate"} valueColor="#16a34a" background="#f0fdf4" border="#bbf7d0" />
             </div>
 
-            {/* ── Response time table ── */}
+            {/* ── Response time detail table ── */}
             {responseTimeRows.length > 0 && (
               <>
                 <SectionHeader title="Response Time Detail" subtitle="Submission to first outreach per flagged check-in" />
