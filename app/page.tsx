@@ -22,7 +22,7 @@ type SavedRecord = {
   duration: "under_5" | "5_30" | "over_30" | "none";
   chestPain: boolean;
   shortnessOfBreath: "none" | "activity" | "rest";
-  precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "unknown";
+  precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "alcohol" | "unknown";
   clinicContactMe: boolean;
   wouldHaveGoneToED: boolean;
   status: "urgent" | "attention" | "stable";
@@ -30,14 +30,17 @@ type SavedRecord = {
   created_at?: string;
 };
 
+type PriorCheckin = {
+  status: "urgent" | "attention" | "stable";
+  created_at: string;
+};
+
 const PROFILE_KEY = "afib_registration";
 
-// Per-patient last check-in key
 function lastCheckinKey(studyCode: string): string {
   return `afib_last_checkin_${studyCode.trim().toUpperCase()}`;
 }
 
-// Centralized study code normalization
 function normalizeStudyCode(value: string): string {
   return value.trim().toUpperCase();
 }
@@ -53,8 +56,7 @@ function getWeeksSinceAblation(ablationDate: string): number {
 
 function isValidDate(dateStr: string): boolean {
   if (!dateStr) return false;
-  const d = new Date(dateStr);
-  return !Number.isNaN(d.getTime());
+  return !Number.isNaN(new Date(dateStr).getTime());
 }
 
 function saveRegistration(registration: Registration) {
@@ -66,7 +68,6 @@ function loadRegistration(): Registration | null {
     const raw = localStorage.getItem(PROFILE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    // Validate before returning
     if (!parsed?.studyCode || !parsed?.ablationDate || !isValidDate(parsed.ablationDate)) return null;
     return parsed;
   } catch { return null; }
@@ -77,9 +78,8 @@ function saveLastCheckin(studyCode: string) {
 }
 
 function loadLastCheckin(studyCode: string): string | null {
-  try {
-    return localStorage.getItem(lastCheckinKey(studyCode));
-  } catch { return null; }
+  try { return localStorage.getItem(lastCheckinKey(studyCode)); }
+  catch { return null; }
 }
 
 function timeAgoShort(iso: string): string {
@@ -93,6 +93,22 @@ function timeAgoShort(iso: string): string {
 function getCheckinFrequencyHint(weeks: number): string {
   if (weeks <= 4) return "Check in 2-3 times per week during your first 4 weeks.";
   return "Check in once a week, or any time you have symptoms.";
+}
+
+function getTrendLine(priorCheckins: PriorCheckin[]): string | null {
+  if (priorCheckins.length < 3) return null;
+  const last5 = priorCheckins.slice(-5);
+  const latest = last5[last5.length - 1];
+  const allStable = last5.every((c) => c.status === "stable");
+  const priorStable = last5.slice(0, -1).every((c) => c.status === "stable");
+  const anyUrgent = last5.some((c) => c.status === "urgent");
+  const anyAttention = last5.some((c) => c.status === "attention");
+
+  if (allStable) return "You have been stable across your recent check-ins.";
+  if (latest.status !== "stable" && priorStable) return "This is your first concerning symptom in a while.";
+  if (anyUrgent) return "Your care team is tracking your recent symptoms closely.";
+  if (anyAttention) return "We have seen this pattern before — your care team will review it.";
+  return "Your care team is monitoring your check-in pattern.";
 }
 
 function getTriageStatus(input: {
@@ -138,7 +154,7 @@ function buildSummary(input: {
   duration: "under_5" | "5_30" | "over_30" | "none";
   chestPain: boolean;
   shortnessOfBreath: "none" | "activity" | "rest";
-  precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "unknown";
+  precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "alcohol" | "unknown";
   clinicContactMe: boolean;
   wouldHaveGoneToED: boolean;
 }): string {
@@ -155,7 +171,9 @@ function buildSummary(input: {
   if (input.shortnessOfBreath === "activity") parts.push("Shortness of breath with activity");
   if (input.shortnessOfBreath === "rest") parts.push("Shortness of breath at rest");
   if (input.precipitatingFactor !== "none") {
-    const label = input.precipitatingFactor === "missed_meds" ? "Missed medications"
+    const label =
+      input.precipitatingFactor === "missed_meds" ? "Missed medications"
+      : input.precipitatingFactor === "alcohol" ? "Alcohol"
       : input.precipitatingFactor === "unknown" ? "Unknown"
       : input.precipitatingFactor.charAt(0).toUpperCase() + input.precipitatingFactor.slice(1);
     parts.push(`Precipitating factor: ${label}`);
@@ -165,23 +183,24 @@ function buildSummary(input: {
   return parts.length > 0 ? parts.join(". ") + "." : "Symptoms reported.";
 }
 
+function getReassuranceText(status: Status, weeks: number): string {
+  if (status === "stable") {
+    if (weeks <= 4) return "No symptoms today is a great sign. Many patients experience their best days during early recovery.";
+    return "Staying symptom-free is the best possible outcome at this stage of recovery.";
+  }
+  if (status === "expected") {
+    if (weeks <= 4) return "Mild symptoms like these are common in the first few weeks after ablation. The heart is still settling.";
+    if (weeks <= 8) return "Some palpitations during weeks 4-8 are part of normal recovery. Your care team is tracking your pattern.";
+    return "Occasional mild symptoms at this stage are expected. Your check-in has been recorded.";
+  }
+  if (status === "attention") return "We have seen this pattern before and your care team will review it.";
+  if (status === "urgent") return "Based on what you reported, your check-in has been flagged for same-day review.";
+  return "";
+}
+
 function OptionButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "12px 16px",
-        borderRadius: 12,
-        border: active ? "1px solid #111827" : "1px solid #d4d4d4",
-        background: active ? "#111827" : "white",
-        color: active ? "white" : "#111827",
-        fontWeight: 600,
-        cursor: "pointer",
-        fontSize: 14,
-        boxSizing: "border-box",
-      }}
-    >
+    <button type="button" onClick={onClick} style={{ padding: "12px 16px", borderRadius: 12, border: active ? "1px solid #111827" : "1px solid #d4d4d4", background: active ? "#111827" : "white", color: active ? "white" : "#111827", fontWeight: 600, cursor: "pointer", fontSize: 14, boxSizing: "border-box" }}>
       {label}
     </button>
   );
@@ -214,24 +233,37 @@ export default function HomePage() {
   const [studyCode, setStudyCode] = useState("");
   const [ablationDate, setAblationDate] = useState("");
   const [lastCheckin, setLastCheckin] = useState<string | null>(null);
+  const [priorCheckins, setPriorCheckins] = useState<PriorCheckin[]>([]);
+  const [registrationError, setRegistrationError] = useState("");
 
   const [palpitations, setPalpitations] = useState<"none" | "mild" | "moderate" | "severe">("none");
   const [duration, setDuration] = useState<"under_5" | "5_30" | "over_30" | "none">("none");
   const [chestPain, setChestPain] = useState(false);
   const [shortnessOfBreath, setShortnessOfBreath] = useState<"none" | "activity" | "rest">("none");
-  const [precipitatingFactor, setPrecipitatingFactor] = useState<"none" | "exertion" | "stress" | "missed_meds" | "unknown">("none");
+  const [precipitatingFactor, setPrecipitatingFactor] = useState<"none" | "exertion" | "stress" | "missed_meds" | "alcohol" | "unknown">("none");
   const [clinicContactMe, setClinicContactMe] = useState(false);
   const [wouldHaveGoneToED, setWouldHaveGoneToED] = useState(false);
 
   const [savedRecord, setSavedRecord] = useState<SavedRecord | null>(null);
   const [displayStatus, setDisplayStatus] = useState<Status>("stable");
 
+  async function loadPriorCheckins(code: string) {
+    const { data } = await supabase
+      .from("checkins")
+      .select("status, created_at")
+      .eq("study_code", normalizeStudyCode(code))
+      .order("created_at", { ascending: true });
+    if (data) setPriorCheckins(data as PriorCheckin[]);
+  }
+
   useEffect(() => {
     const existing = loadRegistration();
     if (existing?.studyCode && existing?.ablationDate) {
-      setStudyCode(normalizeStudyCode(existing.studyCode));
+      const code = normalizeStudyCode(existing.studyCode);
+      setStudyCode(code);
       setAblationDate(existing.ablationDate);
-      setLastCheckin(loadLastCheckin(existing.studyCode));
+      setLastCheckin(loadLastCheckin(code));
+      loadPriorCheckins(code);
       setStep("start");
     }
   }, []);
@@ -245,19 +277,43 @@ export default function HomePage() {
 
   const weeksSinceAblation = useMemo(() => getWeeksSinceAblation(ablationDate), [ablationDate]);
   const checkinHint = useMemo(() => getCheckinFrequencyHint(weeksSinceAblation), [weeksSinceAblation]);
+  const trendLine = useMemo(() => getTrendLine(priorCheckins), [priorCheckins]);
 
-  function handleRegistrationContinue() {
-    if (!studyCode.trim() || !ablationDate || !isValidDate(ablationDate)) return;
-    const normalized = normalizeStudyCode(studyCode);
-    saveRegistration({ studyCode: normalized, ablationDate });
-    setStudyCode(normalized);
-    setLastCheckin(loadLastCheckin(normalized));
-    setStep("start");
+  const hasAnyReportedSymptom =
+    palpitations !== "none" ||
+    chestPain ||
+    shortnessOfBreath !== "none" ||
+    clinicContactMe ||
+    wouldHaveGoneToED;
+
+  async function handleRegistrationContinue() {
+  setRegistrationError("");
+
+  if (!studyCode.trim() || !ablationDate || !isValidDate(ablationDate)) return;
+
+  const normalized = normalizeStudyCode(studyCode);
+
+  // 🔑 Check against Supabase allowlist
+  const { data, error } = await supabase
+    .from("allowed_study_codes")
+    .select("study_code, active")
+    .eq("study_code", normalized)
+    .single();
+
+  if (error || !data || !data.active) {
+    setRegistrationError("Study code not recognized. Please check with your care team.");
+    return;
   }
 
-  function handleEditRegistration() {
-    setStep("register");
-  }
+  // ✅ Valid → proceed
+  saveRegistration({ studyCode: normalized, ablationDate });
+  setStudyCode(normalized);
+  setLastCheckin(loadLastCheckin(normalized));
+  loadPriorCheckins(normalized);
+  setStep("start");
+}
+
+  function handleEditRegistration() { setStep("register"); }
 
   async function saveCheckin(record: SavedRecord) {
     setSubmitting(true);
@@ -281,6 +337,7 @@ export default function HomePage() {
     if (error) { console.error(error); alert("Error saving check-in"); return; }
     saveLastCheckin(record.studyCode);
     setLastCheckin(new Date().toISOString());
+    await loadPriorCheckins(record.studyCode);
     setSavedRecord({ ...record, id: data.id, created_at: data.created_at });
     setStep("result");
   }
@@ -288,25 +345,18 @@ export default function HomePage() {
   async function handleNoSymptoms() {
     const code = normalizeStudyCode(studyCode);
     const record: SavedRecord = {
-      studyCode: code,
-      ablationDate,
-      weeksSinceAblation,
-      noSymptoms: true,
-      palpitations: "none",
-      duration: "none",
-      chestPain: false,
-      shortnessOfBreath: "none",
-      precipitatingFactor: "none",
-      clinicContactMe: false,
-      wouldHaveGoneToED: false,
-      status: "stable",
-      summary: "No symptoms reported today.",
+      studyCode: code, ablationDate, weeksSinceAblation,
+      noSymptoms: true, palpitations: "none", duration: "none",
+      chestPain: false, shortnessOfBreath: "none", precipitatingFactor: "none",
+      clinicContactMe: false, wouldHaveGoneToED: false,
+      status: "stable", summary: "No symptoms reported today.",
     };
     setDisplayStatus("stable");
     await saveCheckin(record);
   }
 
   async function handleSubmitSymptoms() {
+    if (!hasAnyReportedSymptom) return;
     const code = normalizeStudyCode(studyCode);
     const triageStatus = getTriageStatus({
       noSymptoms: false, palpitations, duration, chestPain,
@@ -317,88 +367,56 @@ export default function HomePage() {
       shortnessOfBreath, precipitatingFactor, clinicContactMe, wouldHaveGoneToED,
     });
     const record: SavedRecord = {
-      studyCode: code,
-      ablationDate,
-      weeksSinceAblation,
-      noSymptoms: false,
-      palpitations, duration, chestPain, shortnessOfBreath,
+      studyCode: code, ablationDate, weeksSinceAblation,
+      noSymptoms: false, palpitations, duration, chestPain, shortnessOfBreath,
       precipitatingFactor, clinicContactMe, wouldHaveGoneToED,
-      status: triageStatus,
-      summary,
+      status: triageStatus, summary,
     };
     setDisplayStatus(getDisplayStatus(triageStatus, false));
     await saveCheckin(record);
   }
 
   function resetSymptoms() {
-    setPalpitations("none");
-    setDuration("none");
-    setChestPain(false);
-    setShortnessOfBreath("none");
-    setPrecipitatingFactor("none");
-    setClinicContactMe(false);
-    setWouldHaveGoneToED(false);
+    setPalpitations("none"); setDuration("none"); setChestPain(false);
+    setShortnessOfBreath("none"); setPrecipitatingFactor("none");
+    setClinicContactMe(false); setWouldHaveGoneToED(false);
   }
 
-  function startNewCheckIn() {
-    resetSymptoms();
-    setSavedRecord(null);
-    setStep("start");
-  }
-
-  // ── Result config ──────────────────────────────────────────────────
+  function startNewCheckIn() { resetSymptoms(); setSavedRecord(null); setStep("start"); }
 
   const currentWeek = savedRecord?.weeksSinceAblation ?? weeksSinceAblation;
+  const reassuranceText = getReassuranceText(displayStatus, currentWeek);
 
   const resultConfig: Record<Status, {
-    headline: string;
-    sub: string;
-    actionNote?: string;
-    color: string;
-    bg: string;
-    border: string;
-    pillLabel: string;
+    headline: string; sub: string; actionNote?: string;
+    color: string; bg: string; border: string; pillLabel: string;
   }> = {
     stable: {
       headline: "You're doing great.",
       sub: "No symptoms today. Keep checking in — consistency is what makes this work.",
-      color: "#16a34a",
-      bg: "#f0fdf4",
-      border: "#bbf7d0",
-      pillLabel: "All Clear",
+      color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", pillLabel: "All Clear",
     },
     expected: {
       headline: "This looks like expected recovery.",
-      sub: `Mild symptoms in the weeks after ablation are common. What you reported is within the normal range for week ${currentWeek} of recovery. Your check-in has been recorded.`,
+      sub: `What you reported is within the normal range for week ${currentWeek} of recovery. Your check-in has been recorded.`,
       actionNote: "No action needed right now. If symptoms worsen, check in again.",
-      color: "#1d4ed8",
-      bg: "#eff6ff",
-      border: "#bfdbfe",
-      pillLabel: "Expected Recovery",
+      color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe", pillLabel: "Expected Recovery",
     },
     attention: {
       headline: "We'll review your symptoms.",
-      sub: "Your care team will follow up based on what you reported. Your check-in has been recorded.",
+      sub: "Your care team will follow up based on what you reported. Your check-in has been flagged for review.",
       actionNote: "If symptoms worsen before we reach you, call your care team directly.",
-      color: "#d97706",
-      bg: "#fffbeb",
-      border: "#fde68a",
-      pillLabel: "Needs Attention",
+      color: "#d97706", bg: "#fffbeb", border: "#fde68a", pillLabel: "Needs Attention",
     },
     urgent: {
       headline: "Please contact your care team.",
       sub: "Based on what you reported, your check-in has been flagged for same-day review.",
       actionNote: "If symptoms worsen before we reach you — call 911 or go to the nearest emergency room immediately.",
-      color: "#dc2626",
-      bg: "#fef2f2",
-      border: "#fecaca",
-      pillLabel: "Urgent",
+      color: "#dc2626", bg: "#fef2f2", border: "#fecaca", pillLabel: "Urgent",
     },
   };
 
   const result = resultConfig[displayStatus];
-
-  // ── Render ─────────────────────────────────────────────────────────
 
   return (
     <Shell>
@@ -423,32 +441,34 @@ export default function HomePage() {
               </div>
               <div style={{ marginBottom: 18 }}>
                 <label style={{ display: "block", fontSize: 14, marginBottom: 8, fontWeight: 600, color: "#111827" }}>Study Code</label>
-                <input
-                  value={studyCode}
-                  onChange={(e) => setStudyCode(e.target.value)}
-                  placeholder="e.g. PT1"
-                  style={{ width: "100%", padding: 14, borderRadius: 12, border: "1px solid #d1d5db", fontSize: 15, boxSizing: "border-box" }}
-                />
+                <input value={studyCode} onChange={(e) => setStudyCode(e.target.value)} placeholder="e.g. PT1" style={{ width: "100%", padding: 14, borderRadius: 12, border: "1px solid #d1d5db", fontSize: 15, boxSizing: "border-box" }} />
               </div>
               <div style={{ marginBottom: 18 }}>
                 <label style={{ display: "block", fontSize: 14, marginBottom: 8, fontWeight: 600, color: "#111827" }}>Date of Ablation</label>
-                <input
-                  type="date"
-                  value={ablationDate}
-                  onChange={(e) => setAblationDate(e.target.value)}
-                  style={{ width: "100%", padding: 14, borderRadius: 12, border: "1px solid #d1d5db", fontSize: 15, boxSizing: "border-box" }}
-                />
+                <input type="date" value={ablationDate} onChange={(e) => setAblationDate(e.target.value)} style={{ width: "100%", padding: 14, borderRadius: 12, border: "1px solid #d1d5db", fontSize: 15, boxSizing: "border-box" }} />
               </div>
               {ablationDate && isValidDate(ablationDate) && (
                 <div style={{ marginBottom: 22, padding: 14, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 15 }}>
                   Weeks since ablation: <strong>{weeksSinceAblation}</strong>
                 </div>
               )}
-              <button
-                onClick={handleRegistrationContinue}
-                disabled={!studyCode.trim() || !ablationDate || !isValidDate(ablationDate)}
-                style={{ width: "100%", padding: "14px 18px", borderRadius: 12, border: "none", background: "#1d4ed8", color: "white", fontWeight: 700, fontSize: 15, cursor: !studyCode.trim() || !ablationDate ? "not-allowed" : "pointer", opacity: !studyCode.trim() || !ablationDate ? 0.5 : 1, boxSizing: "border-box" }}
-              >
+        
+              {registrationError && (
+  <div
+    style={{
+      marginBottom: 16,
+      color: "#b91c1c",
+      background: "#fef2f2",
+      border: "1px solid #fecaca",
+      borderRadius: 10,
+      padding: 12,
+      fontSize: 14,
+    }}
+  >
+    {registrationError}
+  </div>
+)}
+              <button onClick={handleRegistrationContinue} disabled={!studyCode.trim() || !ablationDate || !isValidDate(ablationDate)} style={{ width: "100%", padding: "14px 18px", borderRadius: 12, border: "none", background: "#1d4ed8", color: "white", fontWeight: 700, fontSize: 15, cursor: !studyCode.trim() || !ablationDate ? "not-allowed" : "pointer", opacity: !studyCode.trim() || !ablationDate ? 0.5 : 1, boxSizing: "border-box" }}>
                 Continue
               </button>
             </div>
@@ -465,7 +485,7 @@ export default function HomePage() {
             <div style={{ color: "#64748b", marginTop: 4 }}>Post-ablation · Week <strong>{weeksSinceAblation}</strong></div>
           </div>
 
-          {/* Recovery guidance card — grouped */}
+          {/* Recovery guidance */}
           <div style={{ marginBottom: 20, padding: 16, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>Recovery Guidance</div>
             {lastCheckin && (
@@ -473,22 +493,17 @@ export default function HomePage() {
                 Last check-in: <strong>{timeAgoShort(lastCheckin)}</strong>
               </div>
             )}
+            {trendLine && (
+              <div style={{ fontSize: 13, color: "#334155", marginBottom: 6, fontWeight: 500 }}>{trendLine}</div>
+            )}
             <div style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 500 }}>{checkinHint}</div>
           </div>
 
           <div style={{ display: "grid", gap: 12 }}>
-            <button
-              onClick={handleNoSymptoms}
-              disabled={submitting}
-              style={{ padding: 16, borderRadius: 12, border: "none", background: "#111827", color: "white", fontWeight: 700, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}
-            >
+            <button onClick={handleNoSymptoms} disabled={submitting} style={{ padding: 16, borderRadius: 12, border: "none", background: "#111827", color: "white", fontWeight: 700, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}>
               {submitting ? "Submitting..." : "No symptoms today"}
             </button>
-            <button
-              onClick={() => { resetSymptoms(); setStep("symptoms"); }}
-              disabled={submitting}
-              style={{ padding: 16, borderRadius: 12, border: "1px solid #d1d5db", background: "white", color: "#111827", fontWeight: 700, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}
-            >
+            <button onClick={() => { resetSymptoms(); setStep("symptoms"); }} disabled={submitting} style={{ padding: 16, borderRadius: 12, border: "1px solid #d1d5db", background: "white", color: "#111827", fontWeight: 700, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}>
               I have symptoms
             </button>
           </div>
@@ -497,12 +512,8 @@ export default function HomePage() {
             If you are experiencing chest pain, severe shortness of breath, or feel unsafe — call 911 or go to the nearest emergency room immediately.
           </div>
 
-          {/* Edit registration */}
           <div style={{ marginTop: 20, textAlign: "center" }}>
-            <button
-              onClick={handleEditRegistration}
-              style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
-            >
+            <button onClick={handleEditRegistration} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
               Edit registration
             </button>
           </div>
@@ -569,6 +580,7 @@ export default function HomePage() {
                 <OptionButton label="Exertion" active={precipitatingFactor === "exertion"} onClick={() => setPrecipitatingFactor("exertion")} />
                 <OptionButton label="Stress" active={precipitatingFactor === "stress"} onClick={() => setPrecipitatingFactor("stress")} />
                 <OptionButton label="Missed meds" active={precipitatingFactor === "missed_meds"} onClick={() => setPrecipitatingFactor("missed_meds")} />
+                <OptionButton label="Alcohol" active={precipitatingFactor === "alcohol"} onClick={() => setPrecipitatingFactor("alcohol")} />
                 <OptionButton label="Unknown" active={precipitatingFactor === "unknown"} onClick={() => setPrecipitatingFactor("unknown")} />
               </div>
             </div>
@@ -584,11 +596,18 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Empty symptom warning */}
+          {!hasAnyReportedSymptom && (
+            <div style={{ marginBottom: 12, fontSize: 13, color: "#64748b", padding: "10px 14px", borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+              Please select at least one symptom or concern before submitting.
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
             <button onClick={() => setStep("start")} disabled={submitting} style={{ padding: "12px 18px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", color: "#111827", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 600, opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}>
               Back
             </button>
-            <button onClick={handleSubmitSymptoms} disabled={submitting} style={{ padding: "12px 18px", borderRadius: 10, border: "none", background: "#111827", color: "white", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}>
+            <button onClick={handleSubmitSymptoms} disabled={submitting || !hasAnyReportedSymptom} style={{ padding: "12px 18px", borderRadius: 10, border: "none", background: "#111827", color: "white", cursor: submitting || !hasAnyReportedSymptom ? "not-allowed" : "pointer", fontWeight: 700, opacity: submitting || !hasAnyReportedSymptom ? 0.6 : 1, boxSizing: "border-box" }}>
               {submitting ? "Submitting..." : "Submit Check-In"}
             </button>
           </div>
@@ -599,10 +618,8 @@ export default function HomePage() {
       {step === "result" && savedRecord && result && (
         <div style={{ border: `1px solid ${result.border}`, background: "white", borderRadius: 18, padding: 28, maxWidth: 760, margin: "0 auto", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", overflow: "hidden" }}>
 
-          {/* Top accent bar */}
           <div style={{ height: 4, background: result.color, margin: "-28px -28px 24px -28px" }} />
 
-          {/* Status pill */}
           <div style={{ display: "inline-block", fontWeight: 700, color: result.color, fontSize: 12, marginBottom: 14, background: result.bg, border: `1px solid ${result.border}`, padding: "5px 12px", borderRadius: 999, textTransform: "uppercase", letterSpacing: 0.4 }}>
             {result.pillLabel}
           </div>
@@ -611,29 +628,26 @@ export default function HomePage() {
             {result.headline}
           </h1>
 
-          <p style={{ fontSize: 15, color: "#334155", lineHeight: 1.6, marginBottom: result.actionNote ? 12 : 20, marginTop: 0 }}>
+          <p style={{ fontSize: 15, color: "#334155", lineHeight: 1.6, marginBottom: 12, marginTop: 0 }}>
             {result.sub}
           </p>
 
+          <div style={{ padding: "12px 14px", borderRadius: 10, background: result.bg, border: `1px solid ${result.border}`, fontSize: 14, color: result.color, fontWeight: 500, marginBottom: 16, lineHeight: 1.5 }}>
+            {reassuranceText}
+          </div>
+
           {result.actionNote && (
-            <p style={{ fontSize: 14, color: result.color, fontWeight: 600, lineHeight: 1.5, marginBottom: 20, marginTop: 0 }}>
+            <p style={{ fontSize: 14, color: result.color, fontWeight: 600, lineHeight: 1.5, marginBottom: 16, marginTop: 0 }}>
               {result.actionNote}
             </p>
           )}
 
-          {/* Summary */}
-          <div style={{ padding: 14, background: "#f8fafc", borderRadius: 12, border: "1px solid #e5e7eb", color: "#334155", fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>
-            {savedRecord.summary}
-          </div>
-
-          {/* ER avoidance */}
           {savedRecord.wouldHaveGoneToED && (
             <div style={{ padding: 14, borderRadius: 12, background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8", fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
               Your check-in may have helped you avoid an unnecessary ER visit today.
             </div>
           )}
 
-          {/* Next check-in reminder */}
           <div style={{ padding: "10px 14px", borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 13, color: "#64748b", marginBottom: 20 }}>
             {checkinHint}
           </div>

@@ -6,7 +6,8 @@ import Logo from "@/components/Logo";
 import { supabase } from "@/lib/supabase";
 
 type Status = "urgent" | "attention" | "stable";
-type OutreachStatus = "new" | "attempted" | "called" | "resolved";
+type OutreachStatus = "attempted" | "called" | "resolved";
+
 
 type PatientRecord = {
   id: string;
@@ -18,7 +19,7 @@ type PatientRecord = {
   duration: "under_5" | "5_30" | "over_30" | "none";
   chest_pain: boolean;
   shortness_of_breath: "none" | "activity" | "rest";
-  precipitating_factor: "none" | "exertion" | "stress" | "missed_meds" | "unknown";
+  precipitating_factor: "none" | "exertion" | "stress" | "missed_meds" | "alcohol" | "unknown";
   clinic_contact_me: boolean;
   would_have_gone_to_ed: boolean;
   outreach_status: OutreachStatus | null;
@@ -62,9 +63,9 @@ function outreachDisplayLabel(status: OutreachStatus | null): string {
   if (status === "called") return "Reached";
   if (status === "resolved") return "Resolved";
   if (status === "attempted") return "Attempted";
-  if (status === "new") return "New";
   return "--";
 }
+
 
 // ── UI primitives ─────────────────────────────────────────────────────
 
@@ -227,8 +228,9 @@ export default function PerformancePage() {
   ).length;
   const resolved = flaggedRecords.filter((r) => r.outreach_status === "resolved").length;
   const unresolved = flaggedRecords.filter(
-    (r) => !r.outreach_status || r.outreach_status === "new" || r.outreach_status === "attempted"
-  ).length;
+  (r) => !r.outreach_status || r.outreach_status === "attempted"
+).length;
+
 
   const yellowFlagged = records.filter((r) => r.status === "attention");
   const redFlagged = records.filter((r) => r.status === "urgent");
