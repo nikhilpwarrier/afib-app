@@ -256,17 +256,37 @@ export default function HomePage() {
     if (data) setPriorCheckins(data as PriorCheckin[]);
   }
 
-  useEffect(() => {
+useEffect(() => {
+  async function validateAndLoad() {
     const existing = loadRegistration();
-    if (existing?.studyCode && existing?.ablationDate) {
-      const code = normalizeStudyCode(existing.studyCode);
-      setStudyCode(code);
-      setAblationDate(existing.ablationDate);
-      setLastCheckin(loadLastCheckin(code));
-      loadPriorCheckins(code);
-      setStep("start");
+    if (!existing?.studyCode || !existing?.ablationDate) return;
+
+    const normalized = normalizeStudyCode(existing.studyCode);
+
+    // 🔑 Check Supabase allowlist again
+    const { data } = await supabase
+      .from("allowed_study_codes")
+      .select("study_code, active")
+      .eq("study_code", normalized)
+      .single();
+
+    if (!data || !data.active) {
+      // ❌ NOT allowed anymore → wipe device
+      localStorage.removeItem("afib_registration");
+      setStep("register");
+      return;
     }
-  }, []);
+
+    // ✅ Allowed → proceed
+    setStudyCode(normalized);
+    setAblationDate(existing.ablationDate);
+    setLastCheckin(loadLastCheckin(normalized));
+    loadPriorCheckins(normalized);
+    setStep("start");
+  }
+
+  validateAndLoad();
+}, []);
 
   useEffect(() => {
     const updateSize = () => setIsMobile(window.innerWidth < 900);
