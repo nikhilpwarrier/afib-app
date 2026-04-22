@@ -25,6 +25,7 @@ type SavedRecord = {
   precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "alcohol" | "unknown";
   clinicContactMe: boolean;
   wouldHaveGoneToED: boolean;
+  recoveryTrend?: "better" | "same" | "worse" | null;
   status: "urgent" | "attention" | "stable";
   summary: string;
   created_at?: string;
@@ -157,8 +158,16 @@ function buildSummary(input: {
   precipitatingFactor: "none" | "exertion" | "stress" | "missed_meds" | "alcohol" | "unknown";
   clinicContactMe: boolean;
   wouldHaveGoneToED: boolean;
+  recoveryTrend?: "better" | "same" | "worse" | null;
 }): string {
-  if (input.noSymptoms) return "No symptoms reported today.";
+  if (input.noSymptoms) {
+    const trendLabel =
+      input.recoveryTrend === "better" ? "Feeling better than last check-in."
+      : input.recoveryTrend === "worse" ? "Feeling worse than last check-in."
+      : input.recoveryTrend === "same" ? "Feeling about the same as last check-in."
+      : "";
+    return `No symptoms reported today.${trendLabel ? " " + trendLabel : ""}`;
+  }
   const parts: string[] = [];
   if (input.palpitations !== "none") {
     const label = input.palpitations.charAt(0).toUpperCase() + input.palpitations.slice(1);
@@ -236,6 +245,10 @@ export default function HomePage() {
   const [priorCheckins, setPriorCheckins] = useState<PriorCheckin[]>([]);
   const [registrationError, setRegistrationError] = useState("");
 
+  // Recovery trend state
+  const [recoveryTrend, setRecoveryTrend] = useState<"better" | "same" | "worse" | null>(null);
+  const [showNoSymptomFollowup, setShowNoSymptomFollowup] = useState(false);
+
   const [palpitations, setPalpitations] = useState<"none" | "mild" | "moderate" | "severe">("none");
   const [duration, setDuration] = useState<"under_5" | "5_30" | "over_30" | "none">("none");
   const [chestPain, setChestPain] = useState(false);
@@ -256,37 +269,34 @@ export default function HomePage() {
     if (data) setPriorCheckins(data as PriorCheckin[]);
   }
 
-useEffect(() => {
-  async function validateAndLoad() {
-    const existing = loadRegistration();
-    if (!existing?.studyCode || !existing?.ablationDate) return;
+  useEffect(() => {
+    async function validateAndLoad() {
+      const existing = loadRegistration();
+      if (!existing?.studyCode || !existing?.ablationDate) return;
 
-    const normalized = normalizeStudyCode(existing.studyCode);
+      const normalized = normalizeStudyCode(existing.studyCode);
 
-    // 🔑 Check Supabase allowlist again
-    const { data } = await supabase
-      .from("allowed_study_codes")
-      .select("study_code, active")
-      .eq("study_code", normalized)
-      .single();
+      const { data } = await supabase
+        .from("allowed_study_codes")
+        .select("study_code, active")
+        .eq("study_code", normalized)
+        .single();
 
-    if (!data || !data.active) {
-      // ❌ NOT allowed anymore → wipe device
-      localStorage.removeItem("afib_registration");
-      setStep("register");
-      return;
+      if (!data || !data.active) {
+        localStorage.removeItem("afib_registration");
+        setStep("register");
+        return;
+      }
+
+      setStudyCode(normalized);
+      setAblationDate(existing.ablationDate);
+      setLastCheckin(loadLastCheckin(normalized));
+      loadPriorCheckins(normalized);
+      setStep("start");
     }
 
-    // ✅ Allowed → proceed
-    setStudyCode(normalized);
-    setAblationDate(existing.ablationDate);
-    setLastCheckin(loadLastCheckin(normalized));
-    loadPriorCheckins(normalized);
-    setStep("start");
-  }
-
-  validateAndLoad();
-}, []);
+    validateAndLoad();
+  }, []);
 
   useEffect(() => {
     const updateSize = () => setIsMobile(window.innerWidth < 900);
@@ -307,31 +317,27 @@ useEffect(() => {
     wouldHaveGoneToED;
 
   async function handleRegistrationContinue() {
-  setRegistrationError("");
+    setRegistrationError("");
+    if (!studyCode.trim() || !ablationDate || !isValidDate(ablationDate)) return;
+    const normalized = normalizeStudyCode(studyCode);
 
-  if (!studyCode.trim() || !ablationDate || !isValidDate(ablationDate)) return;
+    const { data, error } = await supabase
+      .from("allowed_study_codes")
+      .select("study_code, active")
+      .eq("study_code", normalized)
+      .single();
 
-  const normalized = normalizeStudyCode(studyCode);
+    if (error || !data || !data.active) {
+      setRegistrationError("Study code not recognized. Please check with your care team.");
+      return;
+    }
 
-  // 🔑 Check against Supabase allowlist
-  const { data, error } = await supabase
-    .from("allowed_study_codes")
-    .select("study_code, active")
-    .eq("study_code", normalized)
-    .single();
-
-  if (error || !data || !data.active) {
-    setRegistrationError("Study code not recognized. Please check with your care team.");
-    return;
+    saveRegistration({ studyCode: normalized, ablationDate });
+    setStudyCode(normalized);
+    setLastCheckin(loadLastCheckin(normalized));
+    loadPriorCheckins(normalized);
+    setStep("start");
   }
-
-  // ✅ Valid → proceed
-  saveRegistration({ studyCode: normalized, ablationDate });
-  setStudyCode(normalized);
-  setLastCheckin(loadLastCheckin(normalized));
-  loadPriorCheckins(normalized);
-  setStep("start");
-}
 
   function handleEditRegistration() { setStep("register"); }
 
@@ -349,6 +355,7 @@ useEffect(() => {
       precipitating_factor: record.precipitatingFactor,
       clinic_contact_me: record.clinicContactMe,
       would_have_gone_to_ed: record.wouldHaveGoneToED,
+      recovery_trend: record.recoveryTrend ?? null,
       status: record.status,
       summary: record.summary,
     };
@@ -363,13 +370,19 @@ useEffect(() => {
   }
 
   async function handleNoSymptoms() {
+    if (!recoveryTrend) return;
     const code = normalizeStudyCode(studyCode);
+    const summary = buildSummary({
+      noSymptoms: true, palpitations: "none", duration: "none",
+      chestPain: false, shortnessOfBreath: "none", precipitatingFactor: "none",
+      clinicContactMe: false, wouldHaveGoneToED: false, recoveryTrend,
+    });
     const record: SavedRecord = {
       studyCode: code, ablationDate, weeksSinceAblation,
       noSymptoms: true, palpitations: "none", duration: "none",
       chestPain: false, shortnessOfBreath: "none", precipitatingFactor: "none",
-      clinicContactMe: false, wouldHaveGoneToED: false,
-      status: "stable", summary: "No symptoms reported today.",
+      clinicContactMe: false, wouldHaveGoneToED: false, recoveryTrend,
+      status: "stable", summary,
     };
     setDisplayStatus("stable");
     await saveCheckin(record);
@@ -400,6 +413,7 @@ useEffect(() => {
     setPalpitations("none"); setDuration("none"); setChestPain(false);
     setShortnessOfBreath("none"); setPrecipitatingFactor("none");
     setClinicContactMe(false); setWouldHaveGoneToED(false);
+    setRecoveryTrend(null); setShowNoSymptomFollowup(false);
   }
 
   function startNewCheckIn() { resetSymptoms(); setSavedRecord(null); setStep("start"); }
@@ -461,7 +475,7 @@ useEffect(() => {
               </div>
               <div style={{ marginBottom: 18 }}>
                 <label style={{ display: "block", fontSize: 14, marginBottom: 8, fontWeight: 600, color: "#111827" }}>Study Code</label>
-                <input value={studyCode} onChange={(e) => setStudyCode(e.target.value)} placeholder="e.g. PT1" style={{ width: "100%", padding: 14, borderRadius: 12, border: "1px solid #d1d5db", fontSize: 15, boxSizing: "border-box" }} />
+                <input value={studyCode} onChange={(e) => setStudyCode(e.target.value)} placeholder="e.g. K7M-001" style={{ width: "100%", padding: 14, borderRadius: 12, border: "1px solid #d1d5db", fontSize: 15, boxSizing: "border-box" }} />
               </div>
               <div style={{ marginBottom: 18 }}>
                 <label style={{ display: "block", fontSize: 14, marginBottom: 8, fontWeight: 600, color: "#111827" }}>Date of Ablation</label>
@@ -472,22 +486,11 @@ useEffect(() => {
                   Weeks since ablation: <strong>{weeksSinceAblation}</strong>
                 </div>
               )}
-        
               {registrationError && (
-  <div
-    style={{
-      marginBottom: 16,
-      color: "#b91c1c",
-      background: "#fef2f2",
-      border: "1px solid #fecaca",
-      borderRadius: 10,
-      padding: 12,
-      fontSize: 14,
-    }}
-  >
-    {registrationError}
-  </div>
-)}
+                <div style={{ marginBottom: 16, color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: 12, fontSize: 14 }}>
+                  {registrationError}
+                </div>
+              )}
               <button onClick={handleRegistrationContinue} disabled={!studyCode.trim() || !ablationDate || !isValidDate(ablationDate)} style={{ width: "100%", padding: "14px 18px", borderRadius: 12, border: "none", background: "#1d4ed8", color: "white", fontWeight: 700, fontSize: 15, cursor: !studyCode.trim() || !ablationDate ? "not-allowed" : "pointer", opacity: !studyCode.trim() || !ablationDate ? 0.5 : 1, boxSizing: "border-box" }}>
                 Continue
               </button>
@@ -519,14 +522,47 @@ useEffect(() => {
             <div style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 500 }}>{checkinHint}</div>
           </div>
 
+          {/* Main action buttons */}
           <div style={{ display: "grid", gap: 12 }}>
-            <button onClick={handleNoSymptoms} disabled={submitting} style={{ padding: 16, borderRadius: 12, border: "none", background: "#111827", color: "white", fontWeight: 700, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}>
-              {submitting ? "Submitting..." : "No symptoms today"}
-            </button>
-            <button onClick={() => { resetSymptoms(); setStep("symptoms"); }} disabled={submitting} style={{ padding: 16, borderRadius: 12, border: "1px solid #d1d5db", background: "white", color: "#111827", fontWeight: 700, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}>
+            <button
+  onClick={() => {
+    resetSymptoms();
+    setShowNoSymptomFollowup(true);
+  }}
+  disabled={submitting}
+  style={{ padding: 16, borderRadius: 12, border: "none", background: "#111827", color: "white", fontWeight: 700, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}
+>
+  No symptoms today
+</button>
+            <button
+              onClick={() => { setShowNoSymptomFollowup(false); setRecoveryTrend(null); resetSymptoms(); setStep("symptoms"); }}
+              disabled={submitting}
+              style={{ padding: 16, borderRadius: 12, border: "1px solid #d1d5db", background: "white", color: "#111827", fontWeight: 700, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1, boxSizing: "border-box" }}
+            >
               I have symptoms
             </button>
           </div>
+
+          {/* Recovery trend follow-up — appears after "No symptoms today" */}
+          {showNoSymptomFollowup && (
+            <div style={{ marginTop: 18, padding: 16, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 10 }}>
+                Compared to your last check-in, how do you feel overall?
+              </div>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)" }}>
+                <OptionButton label="Feeling better" active={recoveryTrend === "better"} onClick={() => setRecoveryTrend("better")} />
+                <OptionButton label="About the same" active={recoveryTrend === "same"} onClick={() => setRecoveryTrend("same")} />
+                <OptionButton label="Feeling worse" active={recoveryTrend === "worse"} onClick={() => setRecoveryTrend("worse")} />
+              </div>
+              <button
+                onClick={handleNoSymptoms}
+                disabled={submitting || !recoveryTrend}
+                style={{ marginTop: 14, width: "100%", padding: "12px 18px", borderRadius: 10, border: "none", background: "#111827", color: "white", cursor: submitting || !recoveryTrend ? "not-allowed" : "pointer", fontWeight: 700, opacity: submitting || !recoveryTrend ? 0.6 : 1, boxSizing: "border-box" }}
+              >
+                {submitting ? "Submitting..." : "Submit Check-In"}
+              </button>
+            </div>
+          )}
 
           <div style={{ marginTop: 16, fontSize: 13, color: "#b91c1c", fontWeight: 500, lineHeight: 1.5 }}>
             If you are experiencing chest pain, severe shortness of breath, or feel unsafe — call 911 or go to the nearest emergency room immediately.
