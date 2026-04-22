@@ -8,7 +8,6 @@ import { supabase } from "@/lib/supabase";
 type Status = "urgent" | "attention" | "stable";
 type OutreachStatus = "attempted" | "called" | "resolved";
 
-
 type PatientRecord = {
   id: string;
   study_code: string;
@@ -26,6 +25,7 @@ type PatientRecord = {
   outreach_notes: string | null;
   first_outreach_at: string | null;
   resolved_at: string | null;
+  recovery_trend: "better" | "same" | "worse" | null;
   status: Status;
   summary: string;
   created_at: string;
@@ -66,23 +66,14 @@ function outreachDisplayLabel(status: OutreachStatus | null): string {
   return "--";
 }
 
-
 // ── UI primitives ─────────────────────────────────────────────────────
 
 function SummaryCard({
-  label,
-  value,
-  sub,
-  valueColor = "#111827",
-  background = "white",
-  border = "#e5e7eb",
+  label, value, sub,
+  valueColor = "#111827", background = "white", border = "#e5e7eb",
 }: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  valueColor?: string;
-  background?: string;
-  border?: string;
+  label: string; value: string | number; sub?: string;
+  valueColor?: string; background?: string; border?: string;
 }) {
   return (
     <div style={{ border: `1px solid ${border}`, background, borderRadius: 14, padding: 18, boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
@@ -103,13 +94,9 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
 }
 
 function Table({
-  headers,
-  rows,
-  emptyText = "No data yet.",
+  headers, rows, emptyText = "No data yet.",
 }: {
-  headers: string[];
-  rows: (string | number)[][];
-  emptyText?: string;
+  headers: string[]; rows: (string | number)[][]; emptyText?: string;
 }) {
   return (
     <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden", background: "white", marginBottom: 8 }}>
@@ -122,14 +109,9 @@ function Table({
         <div style={{ padding: "16px 14px", fontSize: 13, color: "#9ca3af" }}>{emptyText}</div>
       ) : (
         rows.map((row, ri) => (
-          <div
-            key={ri}
-            style={{ display: "grid", gridTemplateColumns: `repeat(${headers.length}, 1fr)`, padding: "11px 14px", gap: 8, borderBottom: ri < rows.length - 1 ? "1px solid #f1f5f9" : "none", alignItems: "center" }}
-          >
+          <div key={ri} style={{ display: "grid", gridTemplateColumns: `repeat(${headers.length}, 1fr)`, padding: "11px 14px", gap: 8, borderBottom: ri < rows.length - 1 ? "1px solid #f1f5f9" : "none", alignItems: "center" }}>
             {row.map((cell, ci) => (
-              <div key={ci} style={{ fontSize: 13, color: ci === 0 ? "#111827" : "#64748b", fontWeight: ci === 0 ? 700 : 400 }}>
-                {cell}
-              </div>
+              <div key={ci} style={{ fontSize: 13, color: ci === 0 ? "#111827" : "#64748b", fontWeight: ci === 0 ? 700 : 400 }}>{cell}</div>
             ))}
           </div>
         ))
@@ -228,9 +210,8 @@ export default function PerformancePage() {
   ).length;
   const resolved = flaggedRecords.filter((r) => r.outreach_status === "resolved").length;
   const unresolved = flaggedRecords.filter(
-  (r) => !r.outreach_status || r.outreach_status === "attempted"
-).length;
-
+    (r) => !r.outreach_status || r.outreach_status === "attempted"
+  ).length;
 
   const yellowFlagged = records.filter((r) => r.status === "attention");
   const redFlagged = records.filter((r) => r.status === "urgent");
@@ -260,11 +241,16 @@ export default function PerformancePage() {
   const medianResolutionTime = median(resolutionTimes);
   const medianOverallResponse = median(allResponseTimes);
 
-  // Red contacted within 60 min
   const redContactedFast = redFlagged.filter((r) => {
     if (!r.first_outreach_at) return false;
     return minutesBetween(r.created_at, r.first_outreach_at) <= 60;
   }).length;
+
+  // ── Recovery trend metrics ────────────────────────────────────────────
+  const noSymptomWithTrend = records.filter((r) => r.no_symptoms && r.recovery_trend !== null).length;
+  const noSymptomBetter = records.filter((r) => r.no_symptoms && r.recovery_trend === "better").length;
+  const noSymptomSame = records.filter((r) => r.no_symptoms && r.recovery_trend === "same").length;
+  const noSymptomWorse = records.filter((r) => r.no_symptoms && r.recovery_trend === "worse").length;
 
   // Weekly distribution
   const weekBuckets: Record<number, { total: number; yellow: number; red: number }> = {};
@@ -311,6 +297,12 @@ export default function PerformancePage() {
     ["> 30 min", dur.over_30, pct(dur.over_30, totalCheckins)],
   ].filter(([, v]) => (v as number) > 0);
 
+  const trajectoryRows = [
+    ["Feeling better", noSymptomBetter, pct(noSymptomBetter, noSymptomWithTrend)],
+    ["About the same", noSymptomSame, pct(noSymptomSame, noSymptomWithTrend)],
+    ["Feeling worse", noSymptomWorse, pct(noSymptomWorse, noSymptomWithTrend)],
+  ].filter(([, count]) => (count as number) > 0);
+
   // Patient-level table
   const patientTableRows = patientCodes.map((code) => {
     const pts = records.filter((r) => r.study_code === code);
@@ -327,7 +319,7 @@ export default function PerformancePage() {
       : null;
     return [
       code,
-      pts[0]?.weeks_since_ablation ?? "--",
+      lastCheckin?.weeks_since_ablation ?? "--",
       pts.length,
       yellows || "--",
       reds || "--",
@@ -386,28 +378,14 @@ export default function PerformancePage() {
           <div style={{ color: "#64748b", fontSize: 14, padding: 24 }}>Loading...</div>
         ) : (
           <>
-            {/* ── TOP SUMMARY — outcome-first ── */}
+            {/* ── TOP SUMMARY ── */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 12, marginBottom: 8 }}>
               <SummaryCard label="Patients with Check-Ins" value={totalPatients} sub={`${medianCheckins} median check-ins`} />
               <SummaryCard label="Total Check-Ins" value={totalCheckins} sub={`${noSymptomCheckins} no symptoms`} />
               <SummaryCard label="ER Avoided" value={erAvoidanceTotal} sub={`${erAvoidancePatients} patients · ${pct(erAvoidanceTotal, symptomCheckins)} of symptomatic`} valueColor="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
               <SummaryCard label="Flags Contacted" value={`${contacted} / ${totalFlags}`} sub={pct(contacted, totalFlags) + " contact rate"} valueColor={contacted === totalFlags && totalFlags > 0 ? "#16a34a" : "#d97706"} background={contacted === totalFlags && totalFlags > 0 ? "#f0fdf4" : "#fffbeb"} border={contacted === totalFlags && totalFlags > 0 ? "#bbf7d0" : "#fde68a"} />
-              <SummaryCard
-                label="Median Response Time"
-                value={allResponseTimes.length > 0 ? formatMinutes(medianOverallResponse) : "--"}
-                sub="submission to first outreach"
-                valueColor="#1d4ed8"
-                background="#eff6ff"
-                border="#bfdbfe"
-              />
-              <SummaryCard
-                label="Median Time to Close"
-                value={resolutionTimes.length > 0 ? formatMinutes(medianResolutionTime) : "--"}
-                sub="submission to resolved"
-                valueColor="#16a34a"
-                background="#f0fdf4"
-                border="#bbf7d0"
-              />
+              <SummaryCard label="Median Response Time" value={allResponseTimes.length > 0 ? formatMinutes(medianOverallResponse) : "--"} sub="submission to first outreach" valueColor="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
+              <SummaryCard label="Median Time to Close" value={resolutionTimes.length > 0 ? formatMinutes(medianResolutionTime) : "--"} sub="submission to resolved" valueColor="#16a34a" background="#f0fdf4" border="#bbf7d0" />
             </div>
 
             {/* ── Utilization ── */}
@@ -418,6 +396,20 @@ export default function PerformancePage() {
               <SummaryCard label="Callback Requests" value={callbackRequests} sub={pct(callbackRequests, totalCheckins) + " of check-ins"} />
               <SummaryCard label="Total Flags" value={totalFlags} sub={`${yellowFlags} yellow · ${redFlags} red`} />
             </div>
+
+            {/* ── Recovery Trajectory ── */}
+            {noSymptomWithTrend > 0 && (
+              <>
+                <SectionHeader title="Recovery Trajectory" subtitle="Among no-symptom check-ins, how are patients feeling compared with last time?" />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 8 }}>
+                  <SummaryCard label="No-Symptom Check-Ins with Trend" value={noSymptomWithTrend} sub={pct(noSymptomWithTrend, noSymptomCheckins) + " of no-symptom check-ins"} />
+                  <SummaryCard label="Feeling Better" value={noSymptomBetter} sub={pct(noSymptomBetter, noSymptomWithTrend)} valueColor="#16a34a" background="#f0fdf4" border="#bbf7d0" />
+                  <SummaryCard label="About the Same" value={noSymptomSame} sub={pct(noSymptomSame, noSymptomWithTrend)} valueColor="#64748b" background="#f8fafc" border="#e2e8f0" />
+                  <SummaryCard label="Feeling Worse" value={noSymptomWorse} sub={pct(noSymptomWorse, noSymptomWithTrend)} valueColor={noSymptomWorse > 0 ? "#d97706" : "#16a34a"} background={noSymptomWorse > 0 ? "#fffbeb" : "#f0fdf4"} border={noSymptomWorse > 0 ? "#fde68a" : "#bbf7d0"} />
+                </div>
+                <Table headers={["Recovery Trend", "Count", "% No-Symptom"]} rows={trajectoryRows} emptyText="No recovery trend data yet." />
+              </>
+            )}
 
             {/* ── Clinical signal ── */}
             <SectionHeader title="Clinical Signal" subtitle="What is the pathway detecting?" />
@@ -431,65 +423,23 @@ export default function PerformancePage() {
             {/* ── Outreach performance ── */}
             <SectionHeader title="Outreach Performance" subtitle="Are flagged patients being followed up, and how fast?" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 8 }}>
-              {/* Color-tinted contact cards */}
-              <SummaryCard
-                label="Yellow Contacted"
-                value={`${yellowContacted} / ${yellowFlags}`}
-                sub={pct(yellowContacted, yellowFlags) + " contact rate"}
-                valueColor="#d97706"
-                background="#fffbeb"
-                border="#fde68a"
-              />
-              <SummaryCard
-                label="Red Contacted"
-                value={`${redContacted} / ${redFlags}`}
-                sub={pct(redContacted, redFlags) + " contact rate"}
-                valueColor="#dc2626"
-                background="#fef2f2"
-                border="#fecaca"
-              />
-              <SummaryCard
-                label="Median Yellow Response"
-                value={yellowResponseTimes.length > 0 ? formatMinutes(medianYellowResponse) : "--"}
-                sub="submission to first outreach"
-                valueColor="#d97706"
-                background="#fffbeb"
-                border="#fde68a"
-              />
-              <SummaryCard
-                label="Median Red Response"
-                value={redResponseTimes.length > 0 ? formatMinutes(medianRedResponse) : "--"}
-                sub="submission to first outreach"
-                valueColor="#dc2626"
-                background="#fef2f2"
-                border="#fecaca"
-              />
+              <SummaryCard label="Yellow Contacted" value={`${yellowContacted} / ${yellowFlags}`} sub={pct(yellowContacted, yellowFlags) + " contact rate"} valueColor="#d97706" background="#fffbeb" border="#fde68a" />
+              <SummaryCard label="Red Contacted" value={`${redContacted} / ${redFlags}`} sub={pct(redContacted, redFlags) + " contact rate"} valueColor="#dc2626" background="#fef2f2" border="#fecaca" />
+              <SummaryCard label="Median Yellow Response" value={yellowResponseTimes.length > 0 ? formatMinutes(medianYellowResponse) : "--"} sub="submission to first outreach" valueColor="#d97706" background="#fffbeb" border="#fde68a" />
+              <SummaryCard label="Median Red Response" value={redResponseTimes.length > 0 ? formatMinutes(medianRedResponse) : "--"} sub="submission to first outreach" valueColor="#dc2626" background="#fef2f2" border="#fecaca" />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 8 }}>
               <SummaryCard label="Alerts Resolved" value={resolved} sub={pct(resolved, totalFlags) + " closure rate"} valueColor="#16a34a" background="#f0fdf4" border="#bbf7d0" />
               <SummaryCard label="Unresolved Alerts" value={unresolved} sub="require follow-up" valueColor={unresolved > 0 ? "#d97706" : "#16a34a"} background={unresolved > 0 ? "#fffbeb" : "#f0fdf4"} border={unresolved > 0 ? "#fde68a" : "#bbf7d0"} />
-              <SummaryCard
-                label="Red Alerts Within 60 min"
-                value={redFlags > 0 ? `${redContactedFast} / ${redFlags}` : "--"}
-                sub={pct(redContactedFast, redFlags) + " within 1 hour"}
-                valueColor="#dc2626"
-              />
-              <SummaryCard
-                label="Median Time to Close"
-                value={resolutionTimes.length > 0 ? formatMinutes(medianResolutionTime) : "--"}
-                sub="submission to resolved"
-                valueColor="#16a34a"
-              />
+              <SummaryCard label="Red Alerts Within 60 min" value={redFlags > 0 ? `${redContactedFast} / ${redFlags}` : "--"} sub={pct(redContactedFast, redFlags) + " within 1 hour"} valueColor="#dc2626" />
+              <SummaryCard label="Median Time to Close" value={resolutionTimes.length > 0 ? formatMinutes(medianResolutionTime) : "--"} sub="submission to resolved" valueColor="#16a34a" />
             </div>
 
             {/* ── Response time detail table ── */}
             {responseTimeRows.length > 0 && (
               <>
                 <SectionHeader title="Response Time Detail" subtitle="Submission to first outreach per flagged check-in" />
-                <Table
-                  headers={["Patient", "Flag", "Submitted", "First Outreach", "Response Time", "Time to Close"]}
-                  rows={responseTimeRows}
-                />
+                <Table headers={["Patient", "Flag", "Submitted", "First Outreach", "Response Time", "Time to Close"]} rows={responseTimeRows} />
               </>
             )}
 
@@ -507,11 +457,7 @@ export default function PerformancePage() {
 
             {/* ── Patient-level table ── */}
             <SectionHeader title="Patient Summary" subtitle="Per-patient breakdown across the pilot" />
-            <Table
-              headers={["Study Code", "Week", "Check-Ins", "Yellow", "Red", "ER Avoided", "Outreach", "Last Check-In"]}
-              rows={patientTableRows}
-              emptyText="No patients enrolled yet."
-            />
+            <Table headers={["Study Code", "Week", "Check-Ins", "Yellow", "Red", "ER Avoided", "Outreach", "Last Check-In"]} rows={patientTableRows} emptyText="No patients enrolled yet." />
 
             {/* ── Signal detail ── */}
             <SectionHeader title="Signal Detail" subtitle="What symptoms are driving flags?" />
