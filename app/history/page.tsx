@@ -123,7 +123,10 @@ function HistoryCard({ patient, onRefresh }: { patient: PatientRecord; onRefresh
   const [savingNotes, setSavingNotes] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
 
-  const outreachStatus = patient.outreach_status || "new";
+  // ✅ FIX: local state so UI updates immediately on button click
+  const [outreachStatus, setOutreachStatus] = useState<OutreachStatus>(
+    patient.outreach_status || "new"
+  );
 
   async function updateOutreachStatus(nextStatus: OutreachStatus) {
     setSavingStatus(true);
@@ -156,6 +159,9 @@ function HistoryCard({ patient, onRefresh }: { patient: PatientRecord; onRefresh
 
     setSavingStatus(false);
     if (error) { console.error(error); alert("Error saving outreach status"); return; }
+
+    // ✅ FIX: update local state immediately so button highlights without waiting for refresh
+    setOutreachStatus(nextStatus);
     onRefresh();
   }
 
